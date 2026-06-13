@@ -182,7 +182,9 @@ class PPPPCamera(PPPPBaseEntity, Camera):
                         break
             finally:
                 LOGGER.info('%s camera stream closed', self.name)
-                return response
+        # Return outside the `finally` so a CancelledError raised when the client
+        # disconnects propagates instead of being swallowed by `return`.
+        return response
 
     async def async_perform_ptz(
         self,
