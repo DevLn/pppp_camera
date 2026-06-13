@@ -37,6 +37,9 @@ CONF_INTERVAL = "interval"
 CONF_LAMP = "lamp"
 CONF_IDLE_DISCONNECT_DELAY = "idle_disconnect_delay"
 
+# Maps a lamp entity key to the camera property that reports its on/off state.
+LAMP_STATE_PROPERTY = {"white_lamp": "lamp", "ir_lamp": "icut"}
+
 # Seconds to keep a camera session open after the last in-flight operation
 # finishes. Keeping it warm lets back-to-back commands (e.g. PTZ bursts) reuse
 # the session and avoids tearing the connection down before a fire-and-forget
