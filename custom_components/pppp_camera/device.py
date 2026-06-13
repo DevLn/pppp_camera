@@ -14,8 +14,10 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .config_helpers import get_idle_disconnect_delay
+from .const import DOMAIN
 
 
 class PPPPDevice:
@@ -40,6 +42,15 @@ class PPPPDevice:
         self._lock = asyncio.Lock()
         self._idle_unload_task: asyncio.Task | None = None
         self._idle_disconnect_delay: int = get_idle_disconnect_delay(hass)
+
+        # Entities subscribe to this signal to refresh their availability.
+        self.signal_available = f"{DOMAIN}_{config_entry.entry_id}_available"
+
+    def _set_available(self, value: bool) -> None:
+        """Update availability and notify entities only when it changes."""
+        if self.available != value:
+            self.available = value
+            async_dispatcher_send(self.hass, self.signal_available)
 
     async def _async_update_listener(
         self, hass: HomeAssistant, entry: ConfigEntry
@@ -75,7 +86,15 @@ class PPPPDevice:
             self._cancel_idle_unload()
             self._connected_num += 1
             if not self.device.is_connected:
-                await self.device.connect()
+                try:
+                    await self.device.connect()
+                except Exception:
+                    # ensure_connected() skips close() when connect() raises, so
+                    # roll back the reference we just took to avoid leaking it.
+                    self._connected_num -= 1
+                    self._set_available(False)
+                    raise
+            self._set_available(True)
 
     async def close(self):
         """Release a connection reference; tear down only after an idle window."""

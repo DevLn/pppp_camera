@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
@@ -13,6 +14,14 @@ class PPPPBaseEntity(Entity):
     def __init__(self, device: PPPPDevice) -> None:
         """Initialize the PPPP entity."""
         self.device: PPPPDevice = device
+
+    async def async_added_to_hass(self) -> None:
+        """Refresh state when the device's availability changes."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, self.device.signal_available, self.async_write_ha_state
+            )
+        )
 
     @property
     def available(self):
