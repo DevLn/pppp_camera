@@ -8,10 +8,15 @@ from functools import cached_property
 import aiopppp
 import voluptuous as vol
 from aiohttp import web
-from homeassistant.components.camera import Camera, CameraEntityDescription
+from homeassistant.components.camera import (
+    Camera,
+    CameraEntityDescription,
+    CameraEntityFeature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import uuid
 
@@ -105,8 +110,8 @@ async def async_setup_entry(
 
 class PPPPCamera(PPPPBaseEntity, Camera):
     """An implementation of a PPPP camera."""
-    _attr_is_streaming = True
     _attr_has_entity_name = True
+    _attr_supported_features = CameraEntityFeature.ON_OFF
     description = CameraEntityDescription(key = "camera", translation_key = "camera")
 
     def __init__(self, device: PPPPDevice) -> None:
@@ -116,6 +121,40 @@ class PPPPCamera(PPPPBaseEntity, Camera):
 
         #self._attr_name = self.device.dev_id
         self._attr_unique_id = f'{self.device.dev_id}_camera'
+        # True while explicitly turned on via camera.turn_on, which holds a
+        # connection reference open so streaming persists until turned off.
+        self._stream_hold = False
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to availability (base) and streaming-state updates."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, self.device.signal_streaming, self.async_write_ha_state
+            )
+        )
+
+    @property
+    def is_streaming(self) -> bool:
+        """Return True only while video is actively being streamed."""
+        dev = self.device.device
+        return dev.is_connected and dev.is_video_requested
+
+    async def async_turn_on(self) -> None:
+        """Start streaming and keep the session open until turned off."""
+        if not self._stream_hold:
+            # Hold a connection reference so the session isn't idle-closed.
+            await self.device.connect()
+            self._stream_hold = True
+        await self.device.device.start_video()
+
+    async def async_turn_off(self) -> None:
+        """Stop streaming and release the held session."""
+        if self.device.device.is_connected and self.device.device.is_video_requested:
+            await self.device.device.stop_video()
+        if self._stream_hold:
+            self._stream_hold = False
+            await self.device.close()
 
     @cached_property
     def use_stream_for_stills(self) -> bool:

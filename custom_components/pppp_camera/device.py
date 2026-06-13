@@ -13,7 +13,7 @@ from homeassistant.const import (
     CONF_USERNAME,
     Platform,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .config_helpers import get_idle_disconnect_delay
@@ -43,14 +43,20 @@ class PPPPDevice:
         self._idle_unload_task: asyncio.Task | None = None
         self._idle_disconnect_delay: int = get_idle_disconnect_delay(hass)
 
-        # Entities subscribe to this signal to refresh their availability.
+        # Entities subscribe to these signals to refresh availability / stream state.
         self.signal_available = f"{DOMAIN}_{config_entry.entry_id}_available"
+        self.signal_streaming = f"{DOMAIN}_{config_entry.entry_id}_streaming"
 
     def _set_available(self, value: bool) -> None:
         """Update availability and notify entities only when it changes."""
         if self.available != value:
             self.available = value
             async_dispatcher_send(self.hass, self.signal_available)
+
+    @callback
+    def _on_video_state_change(self, is_streaming: bool) -> None:
+        """Forward the library's streaming-state change to subscribed entities."""
+        async_dispatcher_send(self.hass, self.signal_streaming)
 
     async def _async_update_listener(
         self, hass: HomeAssistant, entry: ConfigEntry
@@ -134,6 +140,7 @@ class PPPPDevice:
             host=self.config_entry.options[CONF_HOST],
             username=self.config_entry.options[CONF_USERNAME],
             password=self.config_entry.options[CONF_PASSWORD],
+            on_video_state_change=self._on_video_state_change,
         )
 
         async with self.ensure_connected():
@@ -478,10 +485,12 @@ def get_device(
     host: str,
     username: str | None,
     password: str | None,
+    on_video_state_change=None,
 ) -> aiopppp.Device:
     """Get Device instance."""
     return aiopppp.Device(
         host,
         username=username,
         password=password,
+        on_video_state_change=on_video_state_change,
     )
