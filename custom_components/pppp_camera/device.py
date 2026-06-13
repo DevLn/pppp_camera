@@ -15,6 +15,8 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 
+from .config_helpers import get_idle_disconnect_delay
+
 
 class PPPPDevice:
     """Manages a PPPP device."""
@@ -32,6 +34,12 @@ class PPPPDevice:
 
         self._connected_num = 0
         self._dt_diff_seconds: float = 0
+
+        # Connection lifecycle: serialize connect/close and keep the session
+        # warm for a short idle window so back-to-back operations reuse it.
+        self._lock = asyncio.Lock()
+        self._idle_unload_task: asyncio.Task | None = None
+        self._idle_disconnect_delay: int = get_idle_disconnect_delay(hass)
 
     async def _async_update_listener(
         self, hass: HomeAssistant, entry: ConfigEntry
@@ -61,21 +69,44 @@ class PPPPDevice:
         return self.device.descriptor.dev_id.dev_id
 
     async def connect(self):
-        """Connect to the device."""
-        self._connected_num += 1
-        if not self.device.is_connected:
-            await self.device.connect()
+        """Connect to the device, reusing a warm session when available."""
+        async with self._lock:
+            # A new user cancels any pending idle teardown and reuses the session.
+            self._cancel_idle_unload()
+            self._connected_num += 1
+            if not self.device.is_connected:
+                await self.device.connect()
 
     async def close(self):
-        """Close the connection to the device."""
-        if self.device._session is None or not self._connected_num:
-            self._connected_num = 0
-            return
+        """Release a connection reference; tear down only after an idle window."""
+        async with self._lock:
+            if not self._connected_num:
+                return
+            self._connected_num -= 1
+            if self._connected_num == 0:
+                # Defer teardown instead of closing inline. A command arriving
+                # within the idle window reuses the live session, and a
+                # fire-and-forget command is not cut off by an immediate Close.
+                self._cancel_idle_unload()
+                self._idle_unload_task = asyncio.create_task(self._idle_unload())
 
-        self._connected_num -= 1
-        if self._connected_num == 0:
-            await asyncio.sleep(1);
-            await self.device.close()
+    async def _idle_unload(self) -> None:
+        """Close the session once it has been idle for the configured delay."""
+        try:
+            await asyncio.sleep(self._idle_disconnect_delay)
+        except asyncio.CancelledError:
+            return
+        async with self._lock:
+            # Re-check under the lock: a user may have reconnected during the wait.
+            if self._connected_num == 0 and self.device.is_connected:
+                await self.device.close()
+            self._idle_unload_task = None
+
+    def _cancel_idle_unload(self) -> None:
+        """Cancel a pending idle teardown, if any."""
+        if self._idle_unload_task and not self._idle_unload_task.done():
+            self._idle_unload_task.cancel()
+        self._idle_unload_task = None
 
     async def async_setup(self) -> None:
         """Set up the device."""
@@ -95,7 +126,10 @@ class PPPPDevice:
 
     async def async_stop(self, event=None):
         """Shut it all down."""
-        await self.device.close()
+        async with self._lock:
+            self._cancel_idle_unload()
+            self._connected_num = 0
+            await self.device.close()
 
     async def async_white_light_toggle(self, data):
         """Turn on the white light."""

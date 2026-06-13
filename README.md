@@ -77,6 +77,7 @@ pppp_camera:
     # or single IP can also be specified (usually broadcast address)
     ip: 192.168.1.255
     # if 'ip' is not specified, discovery will listen on all interfaces
+  idle_disconnect_delay: 5    # seconds to keep a session warm after the last operation
 ```
 
 ### Configuration Parameters
@@ -105,6 +106,15 @@ Configure automatic device discovery on your network.
   - Can be a single IP address (e.g., `192.168.1.255` for broadcast)
   - Can be a list of specific IP addresses
   - If not specified, discovery listens on all available network interfaces
+
+#### `idle_disconnect_delay` (optional)
+
+- **`idle_disconnect_delay`** (integer, default: `5`): Seconds to keep a camera
+  session open after the last in-flight operation completes. These cameras allow
+  only one client at a time, so the session is opened on demand and released when
+  idle. Keeping it warm briefly lets back-to-back commands (e.g. PTZ bursts) reuse
+  the session and prevents a fire-and-forget command from being cut off by an
+  immediate disconnect. Set to `0` to disconnect immediately after each operation.
 
 
 ## Usage

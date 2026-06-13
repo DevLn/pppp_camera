@@ -5,7 +5,12 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_DISCOVERY, CONF_PLATFORM
 
-from .const import CONF_DEFAULTS, DOMAIN
+from .const import (
+    CONF_DEFAULTS,
+    CONF_IDLE_DISCONNECT_DELAY,
+    DEFAULT_IDLE_DISCONNECT_DELAY,
+    DOMAIN,
+)
 
 
 def get_config(hass: HomeAssistant) -> dict[str, Any]:
@@ -23,3 +28,9 @@ def get_discovery_config(hass: HomeAssistant) -> dict[str, Any]:
 def get_platform_config(hass: HomeAssistant) -> dict[str, Any]:
     """Get configuration for DOMAIN."""
     return get_config(hass).get(CONF_PLATFORM, {})
+
+def get_idle_disconnect_delay(hass: HomeAssistant) -> int:
+    """Seconds to keep a camera session warm after the last operation."""
+    return get_config(hass).get(
+        CONF_IDLE_DISCONNECT_DELAY, DEFAULT_IDLE_DISCONNECT_DELAY
+    )

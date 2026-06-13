@@ -28,6 +28,8 @@ from .const import (
     CONF_DURATION,
     CONF_INTERVAL,
     CONF_LAMP,
+    CONF_IDLE_DISCONNECT_DELAY,
+    DEFAULT_IDLE_DISCONNECT_DELAY,
 )
 
 
@@ -58,6 +60,10 @@ CONFIG_SCHEMA = vol.Schema(
                         vol.Optional(CONF_IP): vol.Any(cv.string, [cv.string]),
                     }
                 ),
+                vol.Optional(
+                    CONF_IDLE_DISCONNECT_DELAY,
+                    default=DEFAULT_IDLE_DISCONNECT_DELAY,
+                ): vol.All(vol.Coerce(int), vol.Range(min=0)),
             }
         )
     },
@@ -83,6 +89,8 @@ pppp_camera:
         # or single IP can also be specified (usually broadcast address)
         ip: 192.168.1.255
         # if 'ip' is not specified, discovery will listen on all interfaces
+    idle_disconnect_delay: 5    # seconds to keep a session warm after the last
+                                # operation (0 = disconnect immediately)
 """
 
 

@@ -35,3 +35,10 @@ CONF_IP = "ip"
 CONF_DURATION = "duration"
 CONF_INTERVAL = "interval"
 CONF_LAMP = "lamp"
+CONF_IDLE_DISCONNECT_DELAY = "idle_disconnect_delay"
+
+# Seconds to keep a camera session open after the last in-flight operation
+# finishes. Keeping it warm lets back-to-back commands (e.g. PTZ bursts) reuse
+# the session and avoids tearing the connection down before a fire-and-forget
+# command has been delivered. 0 disconnects immediately.
+DEFAULT_IDLE_DISCONNECT_DELAY = 5
