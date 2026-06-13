@@ -30,7 +30,7 @@ class PPPPLightEntityDescription(LightEntityDescription):
     ]
     turn_on_data: Any
     turn_off_data: Any
-    supported_fn: Callable[[PPPPDevice], bool]
+    supported_fn: Callable[[PPPPDevice, HomeAssistant], bool]
 
 
 LIGHTS: tuple[PPPPLightEntityDescription, ...] = (
