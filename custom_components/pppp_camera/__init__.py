@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
+from aiopppp import NotConnectedError
 
 from .camera import PPPPCamera
 from .discovery import async_start_discovery
@@ -115,7 +116,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     device = PPPPDevice(hass, config_entry)
     try:
         await device.async_setup()
-    except TimeoutError as err:
+    except (TimeoutError, NotConnectedError) as err:
+        # NotConnectedError is raised when the camera is found but the session is
+        # lost during connect (e.g. P2pRdy/handshake timeout) -- retry, don't fail.
         await device.device.close()
         raise ConfigEntryNotReady(
             f"Could not connect to camera {device.device.ip_address}: {err}"
