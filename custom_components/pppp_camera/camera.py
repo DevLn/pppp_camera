@@ -176,7 +176,6 @@ class PPPPCamera(PPPPBaseEntity, Camera):
 
             if not video_streaming:
                 await self.device.device.start_video()
-            LOGGER.info('Getting camera image')
             image_frame = await self.device.device.get_video_frame()
             if not video_streaming:
                 await self.device.device.stop_video()
@@ -238,9 +237,11 @@ class PPPPCamera(PPPPBaseEntity, Camera):
     ) -> None:
         """Perform a PTZ action on the camera."""
         async with self.device.ensure_connected():
+            # pan and tilt are independent axes; apply both when both are given
+            # (the previous elif silently dropped tilt when pan was also set).
             if pan:
                 await self.device.device.session.step_rotate(pan)
-            elif tilt:
+            if tilt:
                 await self.device.device.session.step_rotate(tilt)
 
         # await self.device.async_perform_ptz(
@@ -258,5 +259,7 @@ class PPPPCamera(PPPPBaseEntity, Camera):
     async def async_perform_reboot(
             self,
     ) -> None:
-        """Perform a PTZ action on the camera."""
-        await self.device.device.session.reboot()
+        """Reboot the camera."""
+        # Go through the device helper so the session is (re)connected if it was
+        # idle-closed; calling session.reboot() directly fails when disconnected.
+        await self.device.async_reboot(None)

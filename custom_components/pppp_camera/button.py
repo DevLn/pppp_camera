@@ -10,7 +10,7 @@ from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, CONF_LAMP
+from .const import DOMAIN, CONF_LAMP, LAMP_STATE_PROPERTY
 from .device import PPPPDevice
 from .entity import PPPPBaseEntity
 from .config_helpers import get_config, get_platform_config
@@ -33,7 +33,10 @@ BUTTONS: tuple[PPPPButtonEntityDescription, ...] = (
         translation_key="reboot",
         press_fn=lambda device: device.async_reboot,
         press_data=None,
-        supported_fn=lambda device, _: bool(device.device.properties.get("auth", False)),
+        # Reboot is always available on a set-up camera; it was previously gated
+        # on the unrelated "auth" login flag, which hid it whenever login failed
+        # even though reboot works without auth.
+        supported_fn=lambda device, _: True,
         device_class = ButtonDeviceClass.RESTART,
         entity_category = EntityCategory.CONFIG,
     ),
@@ -42,7 +45,7 @@ BUTTONS: tuple[PPPPButtonEntityDescription, ...] = (
         translation_key="white_lamp",
         press_fn=lambda device: device.async_white_light_toggle,
         press_data=None,
-        supported_fn=lambda device, hass: CONF_LAMP in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.BUTTON,
+        supported_fn=lambda device, hass: LAMP_STATE_PROPERTY["white_lamp"] in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.BUTTON,
         icon="mdi:lightbulb"
     ),
     PPPPButtonEntityDescription(
@@ -50,7 +53,7 @@ BUTTONS: tuple[PPPPButtonEntityDescription, ...] = (
         translation_key="ir_lamp",
         press_fn=lambda device: device.async_ir_light_toggle,
         press_data=None,
-        supported_fn=lambda device, hass: CONF_LAMP in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.BUTTON,
+        supported_fn=lambda device, hass: LAMP_STATE_PROPERTY["ir_lamp"] in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.BUTTON,
         icon="mdi:lightbulb-night"
     ),
 )
