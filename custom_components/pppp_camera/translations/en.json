@@ -53,5 +53,18 @@
         "description": "{name}"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Camera options",
+        "data": {
+          "idle_disconnect_delay": "Idle disconnect delay (seconds)"
+        },
+        "data_description": {
+          "idle_disconnect_delay": "How long to keep the camera session warm after the last operation. 0 disconnects immediately."
+        }
+      }
+    }
   }
 }
