@@ -11,6 +11,10 @@ from .device import PPPPDevice
 class PPPPBaseEntity(Entity):
     """Base class common to all PPPP entities."""
 
+    # These entities push state via the dispatcher / are assumed-state; none of
+    # them implement async_update, so polling would just be wasted no-op calls.
+    _attr_should_poll = False
+
     def __init__(self, device: PPPPDevice) -> None:
         """Initialize the PPPP entity."""
         self.device: PPPPDevice = device

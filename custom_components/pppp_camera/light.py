@@ -41,7 +41,7 @@ LIGHTS: tuple[PPPPLightEntityDescription, ...] = (
         turn_off_data=None,
         turn_on_fn=lambda device: device.async_white_light_on,
         turn_off_fn=lambda device: device.async_white_light_off,
-        supported_fn=lambda device, hass: CONF_LAMP in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.LIGHT,
+        supported_fn=lambda device, hass: LAMP_STATE_PROPERTY["white_lamp"] in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.LIGHT,
         icon="mdi:flashlight"
     ),
     PPPPLightEntityDescription(
@@ -51,7 +51,7 @@ LIGHTS: tuple[PPPPLightEntityDescription, ...] = (
         turn_off_data=None,
         turn_on_fn=lambda device: device.async_ir_light_on,
         turn_off_fn=lambda device: device.async_ir_light_off,
-        supported_fn=lambda device, hass: CONF_LAMP in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.LIGHT,
+        supported_fn=lambda device, hass: LAMP_STATE_PROPERTY["ir_lamp"] in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.LIGHT,
         icon="mdi:lightbulb-night",
     ),
 )
