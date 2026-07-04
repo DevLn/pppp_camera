@@ -13,6 +13,10 @@ ATTR_TILT = "tilt"
 ATTR_MOVE_MODE = "move_mode"
 ATTR_CONTINUOUS_DURATION = "continuous_duration"
 ATTR_PRESET = "preset"
+ATTR_ACTION = "action"
+
+PRESET_ACTION_GOTO = "goto"
+PRESET_ACTION_SET = "set"
 
 CONTINUOUS_MOVE = "ContinuousMove"
 RELATIVE_MOVE = "RelativeMove"
@@ -26,6 +30,7 @@ DIR_LEFT = "LEFT"
 DIR_RIGHT = "RIGHT"
 
 SERVICE_PTZ = "ptz"
+SERVICE_PTZ_PRESET = "ptz_preset"
 SERVICE_REBOOT = "reboot"
 
 SOURCE_DISCOVERY_CONFIRM = "discovery_confirm"

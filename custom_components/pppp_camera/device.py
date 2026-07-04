@@ -14,7 +14,9 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import dt as dt_util
 
 from .config_helpers import get_idle_disconnect_delay
 from .const import DOMAIN
@@ -189,6 +191,26 @@ class PPPPDevice:
         """Send out a SystemReboot command."""
         async with self.ensure_connected():
             await self.device.reboot()
+
+    async def async_ptz_preset(self, index: int, action: str) -> None:
+        """Go to or store a PTZ preset (binary-protocol cameras)."""
+        async with self.ensure_connected():
+            session = self.device.session
+            if action == "set":
+                await session.ptz_set_preset(index)
+            else:
+                await session.ptz_goto_preset(index)
+
+    async def async_sync_datetime(self, data=None) -> None:
+        """Set the camera clock to Home Assistant's local time."""
+        async with self.ensure_connected():
+            session = self.device.session
+            set_datetime = getattr(session, "set_datetime", None)
+            if set_datetime is None:
+                raise HomeAssistantError("This camera does not support setting the time")
+            now = dt_util.now()
+            offset = now.utcoffset()
+            await set_datetime(now, tz_seconds=int(offset.total_seconds()) if offset else 0)
 
 
     @contextlib.asynccontextmanager
