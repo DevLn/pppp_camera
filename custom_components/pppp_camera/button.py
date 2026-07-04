@@ -56,6 +56,16 @@ BUTTONS: tuple[PPPPButtonEntityDescription, ...] = (
         supported_fn=lambda device, hass: LAMP_STATE_PROPERTY["ir_lamp"] in device.device.properties and get_platform_config(hass)[CONF_LAMP] == Platform.BUTTON,
         icon="mdi:lightbulb-night"
     ),
+    PPPPButtonEntityDescription(
+        key="sync_time",
+        translation_key="sync_time",
+        press_fn=lambda device: device.async_sync_datetime,
+        press_data=None,
+        # Only binary cameras expose a set-time command in the library.
+        supported_fn=lambda device, _: not device.device.descriptor.is_json,
+        icon="mdi:clock-check",
+        entity_category=EntityCategory.CONFIG,
+    ),
 )
 
 async def async_setup_entry(

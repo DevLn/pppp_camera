@@ -25,6 +25,20 @@
       },
       "ir_lamp": {
         "name": "IR Lamp"
+      },
+      "sync_time": {
+        "name": "Sync time"
+      }
+    },
+    "sensor": {
+      "battery": {
+        "name": "Battery"
+      },
+      "signal": {
+        "name": "Signal strength"
+      },
+      "uptime": {
+        "name": "Uptime"
       }
     },
     "camera": {
@@ -63,6 +77,40 @@
         },
         "data_description": {
           "idle_disconnect_delay": "How long to keep the camera session warm after the last operation. 0 disconnects immediately."
+        }
+      }
+    }
+  },
+  "services": {
+    "reboot": {
+      "name": "Reboot",
+      "description": "Reboots the camera."
+    },
+    "ptz": {
+      "name": "PTZ",
+      "description": "Pans or tilts the camera.",
+      "fields": {
+        "tilt": {
+          "name": "Tilt",
+          "description": "Tilt direction."
+        },
+        "pan": {
+          "name": "Pan",
+          "description": "Pan direction."
+        }
+      }
+    },
+    "ptz_preset": {
+      "name": "PTZ preset",
+      "description": "Moves to or stores a PTZ preset position.",
+      "fields": {
+        "preset": {
+          "name": "Preset",
+          "description": "Preset slot number (0-255)."
+        },
+        "action": {
+          "name": "Action",
+          "description": "Whether to move to the preset or store the current position into it."
         }
       }
     }

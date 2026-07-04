@@ -21,7 +21,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import uuid
 
 from .const import (
+    ATTR_ACTION,
     ATTR_PAN,
+    ATTR_PRESET,
     ATTR_TILT,
     DIR_DOWN,
     DIR_LEFT,
@@ -29,7 +31,10 @@ from .const import (
     DIR_UP,
     DOMAIN,
     LOGGER,
+    PRESET_ACTION_GOTO,
+    PRESET_ACTION_SET,
     SERVICE_PTZ,
+    SERVICE_PTZ_PRESET,
     # ATTR_MOVE_MODE,
     # RELATIVE_MOVE,
     # CONTINUOUS_MOVE,
@@ -37,7 +42,6 @@ from .const import (
     # GOTOPRESET_MOVE,
     # STOP_MOVE,
     # ATTR_CONTINUOUS_DURATION,
-    # ATTR_PRESET,
     SERVICE_REBOOT,
 )
 from .device import PPPPDevice
@@ -78,6 +82,16 @@ async def async_setup_entry(
             # vol.Optional(ATTR_PRESET, default="0"): cv.string,
         },
         "async_perform_ptz",
+    )
+    platform.async_register_entity_service(
+        SERVICE_PTZ_PRESET,
+        {
+            vol.Required(ATTR_PRESET): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+            vol.Optional(ATTR_ACTION, default=PRESET_ACTION_GOTO): vol.In(
+                [PRESET_ACTION_GOTO, PRESET_ACTION_SET]
+            ),
+        },
+        "async_perform_ptz_preset",
     )
     platform.async_register_entity_service(
         SERVICE_REBOOT,
@@ -255,6 +269,10 @@ class PPPPCamera(PPPPBaseEntity, Camera):
         #     tilt,
         #     zoom,
         # )
+
+    async def async_perform_ptz_preset(self, preset: int, action: str = PRESET_ACTION_GOTO) -> None:
+        """Go to or store a PTZ preset."""
+        await self.device.async_ptz_preset(preset, action)
 
     async def async_perform_reboot(
             self,

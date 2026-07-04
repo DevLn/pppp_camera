@@ -3,6 +3,28 @@ reboot:
     entity:
       integration: pppp_camera
       domain: camera
+ptz_preset:
+  target:
+    entity:
+      integration: pppp_camera
+      domain: camera
+  fields:
+    preset:
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+          mode: box
+    action:
+      default: "goto"
+      selector:
+        select:
+          options:
+            - "goto"
+            - "set"
 ptz:
   target:
     entity:
