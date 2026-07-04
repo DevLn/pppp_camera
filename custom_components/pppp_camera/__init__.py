@@ -1,6 +1,5 @@
 """The PPPP IP Camera integration."""
 
-import select
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     EVENT_HOMEASSISTANT_STOP,
@@ -119,9 +118,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     except (TimeoutError, NotConnectedError) as err:
         # NotConnectedError is raised when the camera is found but the session is
         # lost during connect (e.g. P2pRdy/handshake timeout) -- retry, don't fail.
-        await device.device.close()
+        # device.device may not exist yet if setup failed very early; guard it.
+        if getattr(device, "device", None) is not None:
+            await device.device.close()
         raise ConfigEntryNotReady(
-            f"Could not connect to camera {device.device.ip_address}: {err}"
+            f"Could not connect to camera {device.host}: {err}"
         ) from err
 
     hass.data[DOMAIN][config_entry.unique_id] = device
@@ -135,8 +136,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     await hass.config_entries.async_forward_entry_setups(config_entry, device.platforms)
 
-    # Reload entry when its updated.
-    config_entry.async_on_unload(config_entry.add_update_listener(async_reload_entry))
+    # PPPPDevice.async_setup() already registers an options-update listener that
+    # reloads the entry, so don't register a second one here (it would reload twice).
     config_entry.async_on_unload(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, device.async_stop)
     )
@@ -145,9 +146,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the config entry when it changed."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    device: PPPPDevice | None = hass.data.get(DOMAIN, {}).get(entry.unique_id)
+    # Unload the platforms that were actually set up (camera + lamp + button),
+    # not just PLATFORMS (camera only) -- otherwise the lamp/button entities are
+    # orphaned on unload/reload.
+    platforms = device.platforms if device and device.platforms else PLATFORMS
+    unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
+    if unloaded and device is not None:
+        # Tear the warm session down and drop the reference so nothing leaks
+        # across reloads.
+        await device.async_stop()
+        hass.data[DOMAIN].pop(entry.unique_id, None)
+    return unloaded

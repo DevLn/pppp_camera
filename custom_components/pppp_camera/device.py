@@ -119,13 +119,15 @@ class PPPPDevice:
         """Close the session once it has been idle for the configured delay."""
         try:
             await asyncio.sleep(self._idle_disconnect_delay)
+            async with self._lock:
+                # Re-check under the lock: a user may have reconnected during the wait.
+                if self._connected_num == 0 and self.device.is_connected:
+                    await self.device.close()
+                self._idle_unload_task = None
         except asyncio.CancelledError:
+            # Cancellation can arrive during the sleep or while awaiting the lock;
+            # either way there is nothing to clean up (a reconnect took over).
             return
-        async with self._lock:
-            # Re-check under the lock: a user may have reconnected during the wait.
-            if self._connected_num == 0 and self.device.is_connected:
-                await self.device.close()
-            self._idle_unload_task = None
 
     def _cancel_idle_unload(self) -> None:
         """Cancel a pending idle teardown, if any."""
