@@ -13,10 +13,10 @@ from homeassistant.const import (
     CONF_DEVICE_ID,
     CONF_DISCOVERY,
     CONF_ENABLED,
+    EVENT_HOMEASSISTANT_STOP,
 )
 
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.discovery_flow import async_create_flow
 from homeassistant.components import network
 
@@ -36,16 +36,35 @@ async def async_start_discovery(hass: HomeAssistant) -> None:
         LOGGER.info("PPPP camera discovery is disabled in configuration")
         return
 
+    # A single, reused instance so the "already discovered" set persists across
+    # iterations; a fresh instance each pass re-raised a discovery flow for every
+    # known camera on every interval.
+    discovery = PPPPDiscovery(hass)
+
     async def discovery_loop() -> None:
         """Run discovery loop indefinitely."""
         while True:
             try:
-                await PPPPDiscovery(hass).async_run_discovery()
+                await discovery.async_run_discovery()
+            except asyncio.CancelledError:
+                raise
             except Exception as err:
                 LOGGER.error("Error during PPPP camera discovery: %s", err)
             await asyncio.sleep(interval)
 
-    hass.loop.create_task(discovery_loop())
+    # Track the task so it can be cancelled on shutdown instead of running
+    # forever detached.
+    task = hass.async_create_background_task(
+        discovery_loop(), name="pppp_camera discovery"
+    )
+    hass.data.setdefault(DOMAIN, {})["_discovery_task"] = task
+
+    @callback
+    def _stop_discovery(_event) -> None:
+        if not task.done():
+            task.cancel()
+
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _stop_discovery)
 
 
 class PPPPDiscovery:
@@ -55,6 +74,8 @@ class PPPPDiscovery:
         """Initialize the discovery class."""
         self.hass = hass
         self.discovered_devices = set[str]()
+        # Only warn once about a misconfiguration, not every interval.
+        self._warned_no_ips = False
 
     async def async_run_discovery(self) -> None:
         """Run PPPP camera discovery periodically."""
@@ -72,10 +93,13 @@ class PPPPDiscovery:
         )
 
         if not discovery_ips:
-            LOGGER.warning(
-                "No discovery IPs found, PPPP camera discovery will not run."
-            )
+            if not self._warned_no_ips:
+                LOGGER.warning(
+                    "No discovery IPs found, PPPP camera discovery will not run."
+                )
+                self._warned_no_ips = True
             return
+        self._warned_no_ips = False
 
         def device_callback(device: DeviceDescriptor):
             self._discovered_device_callback(device.addr, device.dev_id.dev_id)
@@ -143,7 +167,7 @@ class PPPPDiscovery:
             LOGGER.error(
                 "No valid IP addresses provided in configuration: %s", custom_ips
             )
-            raise HomeAssistantError("No valid IP addresses provided in configuration")
+            return []
 
         LOGGER.info("Using %d custom discovery IPs: %s", len(valid_ips), valid_ips)
         return valid_ips
@@ -195,11 +219,11 @@ class PPPPDiscovery:
 
         except Exception as err:
             LOGGER.error("Failed to get network adapters: %s", err)
-            raise HomeAssistantError(f"Failed to get broadcast IPs: {err}")
+            return []
 
         if not broadcast_ips:
             LOGGER.error("No broadcast IPs found on any network adapters.")
-            raise HomeAssistantError("No broadcast IPs found on any network adapters.")
+            return []
 
         LOGGER.info("Found %d broadcast IPs: %s", len(broadcast_ips), broadcast_ips)
         return broadcast_ips
