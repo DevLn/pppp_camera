@@ -35,8 +35,13 @@ class PPPPBaseEntity(Entity):
         camera_properties = self.device.device.properties
         return DeviceInfo(
             identifiers={(DOMAIN, self.device.dev_id)},
-            hw_version=camera_properties.get('mcuver'),
-            sw_version=camera_properties.get('sysver'),
             model=self.device.dev_id,
             model_id=camera_properties.get('sensor'),
+            serial_number=self.device.dev_id,
+            hw_version=camera_properties.get('mcuver'),
+            # The camera has no web UI (so a configuration_url "Visit" link is
+            # useless) and reports its own ipAddr as zeros. Surface the
+            # configured IP in the Firmware field instead: not strictly
+            # accurate, but it makes the address visible as plain text.
+            sw_version=self.device.host,
         )
