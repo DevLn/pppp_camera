@@ -29,8 +29,13 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers import selector
 
-from .const import DOMAIN, LOGGER, SOURCE_DISCOVERY_CONFIRM
-from .config_helpers import get_defaults
+from .const import (
+    DOMAIN,
+    LOGGER,
+    SOURCE_DISCOVERY_CONFIRM,
+    CONF_IDLE_DISCONNECT_DELAY,
+)
+from .config_helpers import get_defaults, get_idle_disconnect_delay
 
 
 @callback
@@ -70,6 +75,11 @@ async def async_validate_input(
     except (TimeoutError, asyncio.TimeoutError):
         LOGGER.exception("Cannot connect to %s", user_input[CONF_HOST])
         errors[field] = "cannot_connect"
+    except Exception:
+        # Any other failure (connection reset, bad value, auth) should surface
+        # as a friendly cannot_connect error instead of aborting the flow.
+        LOGGER.exception("Unexpected error connecting to %s", user_input[CONF_HOST])
+        errors[field] = "cannot_connect"
 
     return errors, dev_descriptor.dev_id.dev_id if dev_descriptor else ''
 
@@ -78,13 +88,13 @@ class PPPPCameraFlowHandler(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    # @staticmethod
-    # @callback
-    # def async_get_options_flow(
-    #     config_entry: ConfigEntry,
-    # ) -> OptionsFlow:
-    #     """Get the options flow for this handler."""
-    #     return PPPPCameraOptionsFlowHandler()
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> OptionsFlow:
+        """Get the options flow for this handler."""
+        return PPPPCameraOptionsFlowHandler()
 
     async def async_step_integration_discovery(
         self, discovery_info: DiscoveryInfoType
@@ -253,47 +263,33 @@ class PPPPCameraFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
 
-# class PPPPCameraOptionsFlowHandler(OptionsFlow):
-#     """Handle PPPP Camera options."""
+class PPPPCameraOptionsFlowHandler(OptionsFlow):
+    """Handle PPPP Camera options (per-entry overrides)."""
 
-#     async def async_step_init(
-#         self, user_input: dict[str, Any] | None = None
-#     ) -> ConfigFlowResult:
-#         """Manage PPPP Camera options."""
-#         errors: dict[str, str] = {}
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage PPPP Camera options."""
+        if user_input is not None:
+            # Merge over the existing options so host/credentials are preserved.
+            options = {**self.config_entry.options, **user_input}
+            return self.async_create_entry(title="", data=options)
 
-#        # Get defaults for username/password
-#        defaults = get_defaults(self.hass)
-#        default_username = defaults.get(CONF_USERNAME)
-#        default_password = defaults.get(CONF_PASSWORD)
-
-#         if user_input is not None:
-#             errors, dev_id = await async_validate_input(self.hass, user_input)
-#             if not errors:
-#                 for entry in self.hass.config_entries.async_entries(DOMAIN):
-#                     if (
-#                         entry.entry_id != self.config_entry.entry_id
-#                         and entry.options[CONF_HOST] == user_input[CONF_HOST]
-#                     ):
-#                         errors = {CONF_HOST: "already_configured"}
-
-#                 if not errors:
-#                     return self.async_create_entry(
-#                         title=dev_id,
-#                         data={
-#                             CONF_HOST: user_input[CONF_HOST],
-#                             CONF_USERNAME: user_input.get(CONF_USERNAME, default_username),
-#                             CONF_PASSWORD: user_input.get(CONF_PASSWORD, default_password),
-#                         },
-#                     )
-#         else:
-#             user_input = {}
-
-#         return self.async_show_form(
-#             step_id="init",
-#             data_schema=async_get_schema(user_input or self.config_entry.options),
-#             errors=errors,
-#         )
+        current_delay = self.config_entry.options.get(
+            CONF_IDLE_DISCONNECT_DELAY, get_idle_disconnect_delay(self.hass)
+        )
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_IDLE_DISCONNECT_DELAY, default=current_delay
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=3600, step=1, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
 
 class InvalidAuth(HomeAssistantError):

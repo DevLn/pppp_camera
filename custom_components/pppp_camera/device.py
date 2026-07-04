@@ -41,7 +41,7 @@ class PPPPDevice:
         # warm for a short idle window so back-to-back operations reuse it.
         self._lock = asyncio.Lock()
         self._idle_unload_task: asyncio.Task | None = None
-        self._idle_disconnect_delay: int = get_idle_disconnect_delay(hass)
+        self._idle_disconnect_delay: int = get_idle_disconnect_delay(hass, config_entry)
 
         # Entities subscribe to these signals to refresh availability / stream state.
         self.signal_available = f"{DOMAIN}_{config_entry.entry_id}_available"
