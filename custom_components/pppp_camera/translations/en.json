@@ -102,6 +102,16 @@
       "name": "Reboot",
       "description": "Reboots the camera."
     },
+    "talk": {
+      "name": "Talk",
+      "description": "Plays an audio media or TTS source to the camera speaker (talk-back).",
+      "fields": {
+        "media": {
+          "name": "Media",
+          "description": "Audio media or TTS to play through the camera speaker."
+        }
+      }
+    },
     "ptz": {
       "name": "PTZ",
       "description": "Pans or tilts the camera.",

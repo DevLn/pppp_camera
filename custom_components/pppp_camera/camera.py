@@ -13,15 +13,20 @@ from homeassistant.components.camera import (
     CameraEntityDescription,
     CameraEntityFeature,
 )
+from homeassistant.components.media_player import (
+    ATTR_MEDIA_CONTENT_ID,
+    ATTR_MEDIA_CONTENT_TYPE,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_platform
+from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import uuid
 
 from .const import (
     ATTR_ACTION,
+    ATTR_MEDIA,
     ATTR_PAN,
     ATTR_PRESET,
     ATTR_TILT,
@@ -43,12 +48,22 @@ from .const import (
     # STOP_MOVE,
     # ATTR_CONTINUOUS_DURATION,
     SERVICE_REBOOT,
+    SERVICE_TALK,
 )
 from .device import PPPPDevice
 from .entity import PPPPBaseEntity
 
 TIMEOUT = 30
 # BUFFER_SIZE = 102400
+
+# Value produced by the `media` selector in the talk service.
+MEDIA_SELECTOR_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_MEDIA_CONTENT_ID): cv.string,
+        vol.Optional(ATTR_MEDIA_CONTENT_TYPE): cv.string,
+    },
+    extra=vol.ALLOW_EXTRA,
+)
 
 
 async def async_setup_entry(
@@ -97,6 +112,11 @@ async def async_setup_entry(
         SERVICE_REBOOT,
         None,
         "async_perform_reboot",
+    )
+    platform.async_register_entity_service(
+        SERVICE_TALK,
+        {vol.Required(ATTR_MEDIA): MEDIA_SELECTOR_SCHEMA},
+        "async_perform_talk",
     )
 
     async_add_entities([PPPPCamera(device)])
@@ -281,3 +301,16 @@ class PPPPCamera(PPPPBaseEntity, Camera):
         # Go through the device helper so the session is (re)connected if it was
         # idle-closed; calling session.reboot() directly fails when disconnected.
         await self.device.async_reboot(None)
+
+    async def async_perform_talk(self, media: dict) -> None:
+        """Play a media/TTS source to the camera speaker (talk-back)."""
+        from homeassistant.components import media_source
+
+        media_id = media[ATTR_MEDIA_CONTENT_ID]
+        if media_source.is_media_source_id(media_id):
+            resolved = await media_source.async_resolve_media(
+                self.hass, media_id, self.entity_id
+            )
+            media_id = resolved.url
+        media_id = media_source.async_process_play_media_url(self.hass, media_id)
+        await self.device.async_talk(media_id)

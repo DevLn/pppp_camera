@@ -3,6 +3,16 @@ reboot:
     entity:
       integration: pppp_camera
       domain: camera
+talk:
+  target:
+    entity:
+      integration: pppp_camera
+      domain: camera
+  fields:
+    media:
+      required: true
+      selector:
+        media:
 ptz_preset:
   target:
     entity:

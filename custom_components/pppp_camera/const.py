@@ -32,6 +32,9 @@ DIR_RIGHT = "RIGHT"
 SERVICE_PTZ = "ptz"
 SERVICE_PTZ_PRESET = "ptz_preset"
 SERVICE_REBOOT = "reboot"
+SERVICE_TALK = "talk"
+
+ATTR_MEDIA = "media"
 
 SOURCE_DISCOVERY_CONFIRM = "discovery_confirm"
 
