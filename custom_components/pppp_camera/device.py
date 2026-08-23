@@ -208,9 +208,11 @@ class PPPPDevice:
             set_datetime = getattr(session, "set_datetime", None)
             if set_datetime is None:
                 raise HomeAssistantError("This camera does not support setting the time")
-            now = dt_util.now()
-            offset = now.utcoffset()
-            await set_datetime(now, tz_seconds=int(offset.total_seconds()) if offset else 0)
+            # The camera stores the timezone as seconds WEST of UTC; passing
+            # the east-positive offset here inverted every sync (UTC+3 became
+            # UTC-3). aiopppp>=0.4.0 computes the correct wire value itself
+            # when tz_seconds is left unset, so don't second-guess it.
+            await set_datetime(dt_util.now())
 
 
     @contextlib.asynccontextmanager
