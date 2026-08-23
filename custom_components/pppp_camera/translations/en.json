@@ -39,6 +39,22 @@
       },
       "uptime": {
         "name": "Uptime"
+      },
+      "firmware": {
+        "name": "Firmware version"
+      },
+      "power_source": {
+        "name": "Power source",
+        "state": {
+          "external": "External",
+          "battery": "Battery"
+        }
+      },
+      "sd_usage": {
+        "name": "SD card usage"
+      },
+      "timezone": {
+        "name": "Timezone"
       }
     },
     "camera": {

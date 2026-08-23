@@ -78,7 +78,55 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         value_fn=lambda props: props.get("uptime"),
-        supported_fn=lambda props: props.get("uptime") is not None,
+        # Some firmwares report a garbage (negative) uptime; only expose it
+        # when it is a sane non-negative value.
+        supported_fn=lambda props: isinstance(props.get("uptime"), int)
+        and props["uptime"] >= 0,
+    ),
+    PPPPSensorEntityDescription(
+        key="firmware",
+        translation_key="firmware",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda props: props.get("mcuver"),
+        supported_fn=lambda props: bool(props.get("mcuver")),
+    ),
+    PPPPSensorEntityDescription(
+        key="power_source",
+        translation_key="power_source",
+        device_class=SensorDeviceClass.ENUM,
+        options=["external", "battery"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda props: (
+            "external" if props.get("externalPower") else "battery"
+        )
+        if "externalPower" in props
+        else None,
+        supported_fn=lambda props: "externalPower" in props,
+    ),
+    PPPPSensorEntityDescription(
+        key="sd_usage",
+        translation_key="sd_usage",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        # totalSize/usedSize are in the same (unknown) unit, so a ratio is
+        # meaningful even if the absolute unit isn't.
+        value_fn=lambda props: round(
+            100 * props["usedSize"] / props["totalSize"]
+        )
+        if props.get("totalSize")
+        else None,
+        supported_fn=lambda props: bool(props.get("totalSize")),
+    ),
+    PPPPSensorEntityDescription(
+        key="timezone",
+        translation_key="timezone",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda props: props.get("tz"),
+        supported_fn=lambda props: bool(props.get("tz")),
     ),
 )
 
