@@ -201,6 +201,52 @@ class PPPPDevice:
             else:
                 await session.ptz_goto_preset(index)
 
+    async def async_talk(self, url: str) -> None:
+        """Play an audio URL to the camera speaker (talk-back).
+
+        The camera wants 8 kHz mono G.711; ffmpeg transcodes arbitrary media
+        to raw 16-bit PCM at that rate and the session encodes/frames each
+        chunk. Chunks are paced in real time so the camera's small jitter
+        buffer isn't flooded.
+        """
+        from homeassistant.components.ffmpeg import get_ffmpeg_manager
+
+        async with self.ensure_connected():
+            session = self.device.session
+            send_audio = getattr(session, "send_audio", None)
+            start_talk = getattr(session, "start_talk", None)
+            stop_talk = getattr(session, "stop_talk", None)
+            if not (send_audio and start_talk and stop_talk):
+                raise HomeAssistantError("This camera does not support talk-back")
+
+            ffmpeg = get_ffmpeg_manager(self.hass)
+            proc = await asyncio.create_subprocess_exec(
+                ffmpeg.binary, "-nostdin", "-i", url,
+                "-f", "s16le", "-acodec", "pcm_s16le", "-ar", "8000", "-ac", "1", "pipe:1",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            )
+
+            # 960 samples * 2 bytes = 120 ms per chunk at 8 kHz, matching the
+            # camera's own audio chunking.
+            chunk_bytes = 1920
+            chunk_seconds = 0.12
+            await start_talk()
+            try:
+                while True:
+                    pcm = await proc.stdout.read(chunk_bytes)
+                    if not pcm:
+                        break
+                    await send_audio(pcm)
+                    # Pace by how much audio this chunk actually represents.
+                    await asyncio.sleep(chunk_seconds * len(pcm) / chunk_bytes)
+            finally:
+                await stop_talk()
+                if proc.returncode is None:
+                    with contextlib.suppress(ProcessLookupError):
+                        proc.terminate()
+                    with contextlib.suppress(asyncio.TimeoutError):
+                        await asyncio.wait_for(proc.wait(), timeout=5)
+
     async def async_sync_datetime(self, data=None) -> None:
         """Set the camera clock to Home Assistant's local time."""
         async with self.ensure_connected():
