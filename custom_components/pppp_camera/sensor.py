@@ -52,9 +52,12 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        # JSON cameras report batValue, binary cameras batLevel.
-        value_fn=lambda props: _first(props, "batValue", "batLevel"),
-        supported_fn=lambda props: _first(props, "batValue", "batLevel") is not None,
+        # JSON cameras report batValue (percent). Binary cameras report
+        # batLevel in MILLIVOLTS; aiopppp>=0.4.0 derives batPercent from it
+        # (None when externally powered / out of battery range), so use that
+        # -- feeding batLevel here showed readings like "4213%".
+        value_fn=lambda props: _first(props, "batValue", "batPercent"),
+        supported_fn=lambda props: _first(props, "batValue", "batPercent") is not None,
     ),
     PPPPSensorEntityDescription(
         key="signal",
