@@ -133,6 +133,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         Platform.LIGHT,
         Platform.SWITCH,
         Platform.SENSOR,
+        Platform.SELECT,
     ]
 
     await hass.config_entries.async_forward_entry_setups(config_entry, device.platforms)

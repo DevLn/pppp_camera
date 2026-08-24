@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -42,6 +44,25 @@ class PPPPSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[dict[str, Any]], Any]
     supported_fn: Callable[[dict[str, Any]], bool]
+    # Re-render on HA's poll interval. Only for values derived from elapsed
+    # time (the camera clock); polling never touches the camera itself.
+    poll: bool = False
+
+
+def _camera_time(props: dict[str, Any]) -> str | None:
+    """The camera's own clock, advanced by the time since it was read.
+
+    The cameras never push updates and are only queried on connect, so a raw
+    reading would sit frozen at whatever it said during setup. Projecting it
+    forward keeps it comparable with local time at a glance -- a camera whose
+    clock or timezone is wrong stays visibly offset.
+    """
+    read = props.get("camera_time")
+    read_at = props.get("camera_time_read_at")
+    if read is None or read_at is None:
+        return None
+    elapsed = max(0.0, time.monotonic() - read_at)
+    return (read + timedelta(seconds=elapsed)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
@@ -84,14 +105,6 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         and props["uptime"] >= 0,
     ),
     PPPPSensorEntityDescription(
-        key="firmware",
-        translation_key="firmware",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=lambda props: props.get("mcuver"),
-        supported_fn=lambda props: bool(props.get("mcuver")),
-    ),
-    PPPPSensorEntityDescription(
         key="power_source",
         translation_key="power_source",
         device_class=SensorDeviceClass.ENUM,
@@ -99,10 +112,12 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda props: (
             "external" if props.get("externalPower") else "battery"
-        )
-        if "externalPower" in props
-        else None,
-        supported_fn=lambda props: "externalPower" in props,
+        ),
+        # Mains-only cameras don't report power state at all: they leave a
+        # placeholder in batLevel (8000) and a zero powerSupply bit, which
+        # rendered as a confident (and wrong) "Battery". Only expose this
+        # where a real battery reading proves the fields are populated.
+        supported_fn=lambda props: _first(props, "batValue", "batPercent") is not None,
     ),
     PPPPSensorEntityDescription(
         key="sd_usage",
@@ -125,8 +140,25 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         translation_key="timezone",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        # aiopppp reports None when the firmware doesn't actually store a
+        # timezone, so the sensor simply isn't created for those cameras.
         value_fn=lambda props: props.get("tz"),
         supported_fn=lambda props: bool(props.get("tz")),
+    ),
+    PPPPSensorEntityDescription(
+        key="camera_time",
+        translation_key="camera_time",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        poll=True,
+        value_fn=_camera_time,
+        supported_fn=lambda props: props.get("camera_time") is not None,
+    ),
+    PPPPSensorEntityDescription(
+        key="ssid",
+        translation_key="ssid",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda props: props.get("ssid"),
+        supported_fn=lambda props: bool(props.get("ssid")),
     ),
 )
 
@@ -138,12 +170,17 @@ async def async_setup_entry(
 ) -> None:
     """Set up the PPPP sensor platform."""
     device: PPPPDevice = hass.data[DOMAIN][config_entry.unique_id]
-    props = device.device.properties
+    props = _properties(device)
     async_add_entities(
         PPPPSensor(device, description)
         for description in SENSORS
         if description.supported_fn(props)
     )
+
+
+def _properties(device: PPPPDevice) -> dict[str, Any]:
+    """Status-block properties plus the separately-fetched extras."""
+    return {**device.device.properties, **device.extra_info}
 
 
 class PPPPSensor(PPPPBaseEntity, SensorEntity):
@@ -163,8 +200,15 @@ class PPPPSensor(PPPPBaseEntity, SensorEntity):
         super().__init__(device)
         self.entity_description = description
         self._attr_unique_id = f"{self.device.dev_id}_{description.key}"
+        # Overrides the base class's push-only default for time-derived values.
+        self._attr_should_poll = description.poll
+
+    async def async_update(self) -> None:
+        """Re-render only. Polling must never reach out to the camera: these
+        devices accept a single client, so waking one for a diagnostic value
+        would fight with streaming."""
 
     @property
     def native_value(self) -> Any:
         """Return the current value from the camera's last-known properties."""
-        return self.entity_description.value_fn(self.device.device.properties)
+        return self.entity_description.value_fn(_properties(self.device))

@@ -40,9 +40,6 @@
       "uptime": {
         "name": "Uptime"
       },
-      "firmware": {
-        "name": "Firmware version"
-      },
       "power_source": {
         "name": "Power source",
         "state": {
@@ -55,6 +52,24 @@
       },
       "timezone": {
         "name": "Timezone"
+      },
+      "camera_time": {
+        "name": "Camera time"
+      },
+      "ssid": {
+        "name": "Wi-Fi network"
+      }
+    },
+    "select": {
+      "resolution": {
+        "name": "Resolution",
+        "state": {
+          "qvga": "QVGA",
+          "vga": "VGA",
+          "hd": "HD",
+          "fd": "FD",
+          "ud": "UD"
+        }
       }
     },
     "camera": {
