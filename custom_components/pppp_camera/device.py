@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime as dt
+import time
 
 import aiopppp
 from homeassistant.config_entries import ConfigEntry
@@ -19,7 +21,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .config_helpers import get_idle_disconnect_delay
-from .const import DOMAIN
+from .const import DOMAIN, LOGGER
 
 
 class PPPPDevice:
@@ -34,6 +36,10 @@ class PPPPDevice:
         self._original_options = dict(config_entry.options)
         self.available: bool = True
         self.info: dict = {}
+        # Values that aren't in the status block and need their own commands
+        # (clock, Wi-Fi, video params). Refreshed on connect; entities read the
+        # last-known values because these cameras never push updates.
+        self.extra_info: dict = {}
         self.platforms: list[Platform] = []
 
         self._connected_num = 0
@@ -149,6 +155,7 @@ class PPPPDevice:
 
         async with self.ensure_connected():
             self.info = self.device.properties
+            await self._async_fetch_extra_info()
 
         self.config_entry.async_on_unload(
             self.config_entry.add_update_listener(self._async_update_listener)
@@ -160,6 +167,67 @@ class PPPPDevice:
             self._cancel_idle_unload()
             self._connected_num = 0
             await self.device.close()
+
+    async def _async_fetch_extra_info(self) -> None:
+        """Read values that aren't part of the status block.
+
+        Every one of these is optional: cameras answer a different subset
+        (and some answer none), so each failure is recorded as a missing key
+        rather than aborting setup. Must be called with a live connection.
+        """
+        from aiopppp.packets import parse_datetime_block, parse_wifi_settings
+
+        session = self.device.session
+        info: dict = {}
+
+        if (get_datetime := getattr(session, "get_datetime", None)) is not None:
+            try:
+                decoded = parse_datetime_block(await get_datetime(timeout=4))
+                if local := decoded.get("local"):
+                    # Store the camera clock together with the monotonic
+                    # instant it was read, so the sensor can project it
+                    # forward instead of showing a frozen timestamp.
+                    info["camera_time"] = dt.datetime.strptime(local, "%Y-%m-%d %H:%M:%S")
+                    info["camera_time_read_at"] = time.monotonic()
+            except Exception as err:  # noqa: BLE001 - optional, never fatal
+                LOGGER.debug("%s: datetime unavailable: %s", self.dev_id, err)
+
+        if (get_wifi := getattr(session, "get_wifi_settings", None)) is not None:
+            try:
+                wifi = parse_wifi_settings(await get_wifi(timeout=4))
+                if ssid := wifi.get("ssid"):
+                    info["ssid"] = ssid
+            except Exception as err:  # noqa: BLE001 - optional, never fatal
+                LOGGER.debug("%s: wifi settings unavailable: %s", self.dev_id, err)
+
+        if (get_param := getattr(session, "get_video_param_value", None)) is not None:
+            try:
+                if (value := await get_param("resolution", timeout=4)) is not None:
+                    info["resolution"] = value
+            except Exception as err:  # noqa: BLE001 - optional, never fatal
+                LOGGER.debug("%s: resolution unavailable: %s", self.dev_id, err)
+
+        self.extra_info = info
+
+    async def async_refresh_extra_info(self) -> None:
+        """Re-read the extra info and notify entities."""
+        async with self.ensure_connected():
+            await self._async_fetch_extra_info()
+        async_dispatcher_send(self.hass, self.signal_available)
+
+    async def async_set_resolution(self, value: str) -> None:
+        """Set the video resolution and remember the new value."""
+        async with self.ensure_connected():
+            session = self.device.session
+            set_resolution = getattr(session, "set_resolution", None)
+            if set_resolution is None:
+                raise HomeAssistantError("This camera does not support setting the resolution")
+            await set_resolution(value)
+        # The camera doesn't report a param change back, so record what we set;
+        # a later refresh overwrites it with whatever the camera reports.
+        from aiopppp.const import VideoResolution
+
+        self.extra_info["resolution"] = VideoResolution[f"VIDEO_RESOLUTION_{value.upper()}"].value
 
     async def async_white_light_toggle(self, data):
         """Turn on the white light."""
