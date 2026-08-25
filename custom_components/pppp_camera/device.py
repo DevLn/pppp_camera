@@ -200,14 +200,50 @@ class PPPPDevice:
             except Exception as err:  # noqa: BLE001 - optional, never fatal
                 LOGGER.debug("%s: wifi settings unavailable: %s", self.dev_id, err)
 
-        if (get_param := getattr(session, "get_video_param_value", None)) is not None:
-            try:
-                if (value := await get_param("resolution", timeout=4)) is not None:
-                    info["resolution"] = value
-            except Exception as err:  # noqa: BLE001 - optional, never fatal
-                LOGGER.debug("%s: resolution unavailable: %s", self.dev_id, err)
+        # Video parameters are only populated while the stream runs: an idle
+        # camera answers VIDEOPARAM_GET with an all-zero table, which would
+        # read back as a confident (and wrong) QVGA. Keep whatever we already
+        # know instead, and refresh once streaming starts.
+        if (previous := self.extra_info.get("resolution")) is not None:
+            info["resolution"] = previous
+        if self._is_streaming:
+            info.pop("resolution", None)
+            if (value := await self._async_read_resolution()) is not None:
+                info["resolution"] = value
 
         self.extra_info = info
+
+    @property
+    def _is_streaming(self) -> bool:
+        """True while the camera is actively sending video."""
+        return bool(self.device.is_connected and self.device.session.is_video_requested)
+
+    async def _async_read_resolution(self) -> int | None:
+        """Read the current resolution, or None if the camera won't say.
+
+        Repeated parameter reads are flaky on these cameras (they simply stop
+        answering), so a failure is never fatal -- the caller keeps the last
+        known value.
+        """
+        session = self.device.session
+        get_param = getattr(session, "get_video_param_value", None)
+        if get_param is None:
+            return None
+        try:
+            return await get_param("resolution", timeout=4)
+        except Exception as err:  # noqa: BLE001 - optional, never fatal
+            LOGGER.debug("%s: resolution unavailable: %s", self.dev_id, err)
+            return None
+
+    async def async_refresh_resolution(self) -> bool:
+        """Re-read the resolution while streaming. True if the value changed."""
+        if not self._is_streaming:
+            return False
+        value = await self._async_read_resolution()
+        if value is None or value == self.extra_info.get("resolution"):
+            return False
+        self.extra_info["resolution"] = value
+        return True
 
     async def async_refresh_extra_info(self) -> None:
         """Re-read the extra info and notify entities."""
