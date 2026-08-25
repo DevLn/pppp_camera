@@ -33,10 +33,10 @@ BUTTONS: tuple[PPPPButtonEntityDescription, ...] = (
         translation_key="reboot",
         press_fn=lambda device: device.async_reboot,
         press_data=None,
-        # Reboot is always available on a set-up camera; it was previously gated
-        # on the unrelated "auth" login flag, which hid it whenever login failed
-        # even though reboot works without auth.
-        supported_fn=lambda device, _: True,
+        # Reboot is one of the few commands that needs a login: without one the
+        # camera answers -1015 USER_NO_PRIVILEGE. Lights, PTZ, resolution and
+        # time sync do not, which is why only this button is gated.
+        supported_fn=lambda device, _: bool(device.device.properties.get("auth", False)),
         device_class = ButtonDeviceClass.RESTART,
         entity_category = EntityCategory.CONFIG,
     ),
