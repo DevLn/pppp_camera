@@ -52,10 +52,10 @@ none of the tested cameras act on them — see
 [services](#services) below.
 
 > **Status:** the capability matrix above is what the underlying `aiopppp`
-> library was verified to do against real cameras. The newer Home Assistant
-> entities built on top of it (diagnostic sensors, resolution select, talk
-> service, clock sync) are implemented but **have not yet been exercised in a
-> running Home Assistant** — treat that side as untested.
+> library was verified to do against real cameras. Of the newer Home Assistant
+> entities built on top of it, only **talk-back has been confirmed in a running
+> Home Assistant** so far. The diagnostic sensors, resolution select and clock
+> sync are implemented but not yet exercised there — treat those as untested.
 
 ## Entities
 
