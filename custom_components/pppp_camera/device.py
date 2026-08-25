@@ -20,7 +20,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
-from .config_helpers import get_idle_disconnect_delay
+from .config_helpers import get_idle_disconnect_delay, get_status_poll_interval
 from .const import DOMAIN, LOGGER
 
 
@@ -50,6 +50,8 @@ class PPPPDevice:
         self._lock = asyncio.Lock()
         self._idle_unload_task: asyncio.Task | None = None
         self._idle_disconnect_delay: int = get_idle_disconnect_delay(hass, config_entry)
+        self._status_poll_interval: int = get_status_poll_interval(hass, config_entry)
+        self._status_poll_task: asyncio.Task | None = None
 
         # Entities subscribe to these signals to refresh availability / stream state.
         self.signal_available = f"{DOMAIN}_{config_entry.entry_id}_available"
@@ -157,12 +159,16 @@ class PPPPDevice:
             self.info = self.device.properties
             await self._async_fetch_extra_info()
 
+        self._start_status_poll()
+        self.config_entry.async_on_unload(self._stop_status_poll)
+
         self.config_entry.async_on_unload(
             self.config_entry.add_update_listener(self._async_update_listener)
         )
 
     async def async_stop(self, event=None):
         """Shut it all down."""
+        self._stop_status_poll()
         async with self._lock:
             self._cancel_idle_unload()
             self._connected_num = 0
@@ -250,6 +256,53 @@ class PPPPDevice:
         async with self.ensure_connected():
             await self._async_fetch_extra_info()
         async_dispatcher_send(self.hass, self.signal_available)
+
+    async def async_refresh_status(self) -> None:
+        """Re-read the status block (battery, power source, uptime, SD usage).
+
+        The cameras never push updates and the library only reads the status
+        once, during session setup, so these values would otherwise stay frozen
+        at whatever they were when the session first connected.
+        """
+        async with self.ensure_connected():
+            session = self.device.session
+            get_status = getattr(session, "get_status", None)
+            if get_status is not None:
+                status = await get_status()
+                # Keep the auth flag the session recorded at setup; get_status()
+                # doesn't return it and entities shouldn't see it disappear.
+                status.setdefault("auth", session.dev_properties.get("auth"))
+                session.dev_properties = status
+                self.device.properties = status
+                self.info = status
+            await self._async_fetch_extra_info()
+        async_dispatcher_send(self.hass, self.signal_available)
+
+    async def _status_poll_loop(self) -> None:
+        """Refresh the status on a fixed interval until cancelled."""
+        while True:
+            try:
+                await asyncio.sleep(self._status_poll_interval)
+                await self.async_refresh_status()
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # noqa: BLE001 - a poll failure is not fatal
+                # An unreachable camera is already reflected by availability;
+                # keep polling so the values recover on their own.
+                LOGGER.debug("%s: status poll failed: %s", self.dev_id, err)
+
+    def _start_status_poll(self) -> None:
+        if not self._status_poll_interval:
+            LOGGER.debug("%s: status polling disabled", self.dev_id)
+            return
+        self._status_poll_task = self.hass.async_create_background_task(
+            self._status_poll_loop(), f"{DOMAIN}_status_poll_{self.dev_id}"
+        )
+
+    def _stop_status_poll(self) -> None:
+        if self._status_poll_task and not self._status_poll_task.done():
+            self._status_poll_task.cancel()
+        self._status_poll_task = None
 
     async def async_set_resolution(self, value: str) -> None:
         """Set the video resolution and remember the new value."""
