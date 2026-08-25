@@ -14,14 +14,17 @@ These cameras typically use the **Peer-to-Peer protocol** for communication, and
 - PTZ control through actions/services, including preset slots
 - White lights and IR lights control
 - **Talk-back**: play a media or TTS source through the camera speaker
-- Video resolution as a config entity (dropdown)
+- Video resolution as a config entity (dropdown) — see
+  [Known issues](#known-issues)
 - Diagnostic sensors: battery, power source, signal, uptime, SD card usage,
   Wi-Fi network, camera clock offset and timezone
 - Camera clock sync button
 - On-demand connections — the camera is only held open while something needs
   it, because these cameras accept **one client at a time**
+- Automatic reconnection with backoff when a camera drops off the network
 - Support for webrtc custom component
-- Automatic device discovery
+- Automatic device discovery, probing with both the plain and the extended
+  PPPP search packet — some firmwares only answer the extended one
 - (TBD) Listening to camera audio in Home Assistant — the library supports it,
   but the HA camera entity streams video only
 
@@ -52,10 +55,25 @@ none of the tested cameras act on them — see
 [services](#services) below.
 
 > **Status:** the capability matrix above is what the underlying `aiopppp`
-> library was verified to do against real cameras. Of the newer Home Assistant
-> entities built on top of it, only **talk-back has been confirmed in a running
-> Home Assistant** so far. The diagnostic sensors, resolution select and clock
-> sync are implemented but not yet exercised there — treat those as untested.
+> library was verified to do against real cameras. The Home Assistant side —
+> camera, lamps, buttons, diagnostic sensors, resolution select, clock sync,
+> talk-back, the services, discovery and the config/options flows — has now
+> been exercised in a running Home Assistant against PTZA and FTYC cameras.
+> The only entity still unverified is **SD card usage**, for want of a card.
+
+## Known issues
+
+- **A resolution chosen while the camera is idle is overwritten with HD when
+  the stream starts.** The library sets HD at stream start and deliberately
+  re-asserts it a few seconds in (the cameras otherwise self-downgrade and
+  ignore the value set at start time), so an idle selection never survives.
+  Set the resolution *while the stream is running* and it sticks. Note the
+  same re-request path runs after a video stall, so a mid-stream stall can
+  also revert the resolution to HD.
+
+  Fixing it means teaching the library to prefer a chosen resolution instead
+  of the hardcoded default, and having the integration re-apply that choice
+  on connect so it survives the idle session teardown. Not implemented yet.
 
 ## Entities
 
@@ -290,6 +308,8 @@ shortcuts:
 - **Resolution shows as unknown?** The camera only reports its real video
   parameters while it is streaming; an idle camera answers with an empty table.
   Start the stream and the value fills in a couple of seconds later.
+- **Resolution keeps reverting to HD?** Known limitation — set it while the
+  stream is running. See [Known issues](#known-issues).
 - **Clock offset looks stale after pressing Sync time?** The value is re-read a
   moment after the write. If that read-back doesn't land, the next info poll
   replaces it with a genuine reading.
