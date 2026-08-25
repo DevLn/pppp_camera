@@ -63,7 +63,7 @@ LAMP_STATE_PROPERTY = {"white_lamp": "lamp", "ir_lamp": "icut"}
 # command has been delivered. 0 disconnects immediately.
 DEFAULT_IDLE_DISCONNECT_DELAY = 5
 
-# How often to re-read the camera status block (battery, uptime, SD usage).
+# How often to re-read the camera status block (battery, signal, SD usage).
 # Nothing is pushed by these cameras, so without this the values stay frozen
 # at whatever they were when the session first connected.
 #

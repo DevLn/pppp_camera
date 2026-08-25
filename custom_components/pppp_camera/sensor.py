@@ -1,4 +1,4 @@
-"""PPPP diagnostic sensors (battery, signal, uptime)."""
+"""PPPP diagnostic sensors (battery, signal, power source, SD usage)."""
 
 from __future__ import annotations
 
@@ -74,6 +74,10 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
     PPPPSensorEntityDescription(
         key="signal",
         translation_key="signal",
+        # dbm comes out of the binary status block, so it needs the status poll
+        # to refresh (it used to be in no poll group at all, back when it was
+        # believed to be an unusable field).
+        poll_group=POLL_GROUP_STATUS,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         state_class=SensorStateClass.MEASUREMENT,
@@ -81,20 +85,6 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         value_fn=lambda props: _first(props, "signal", "dbm"),
         supported_fn=lambda props: _first(props, "signal", "dbm") is not None,
-    ),
-    PPPPSensorEntityDescription(
-        key="uptime",
-        translation_key="uptime",
-        poll_group=POLL_GROUP_STATUS,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=lambda props: props.get("uptime"),
-        # Some firmwares report a garbage (negative) uptime; only expose it
-        # when it is a sane non-negative value.
-        supported_fn=lambda props: isinstance(props.get("uptime"), int)
-        and props["uptime"] >= 0,
     ),
     PPPPSensorEntityDescription(
         key="power_source",
