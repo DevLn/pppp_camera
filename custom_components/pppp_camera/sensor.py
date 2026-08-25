@@ -147,6 +147,10 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         translation_key="timezone",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        # No poll_group on purpose. The clock response already carries the
+        # timezone, so this refreshes for free whenever the info group runs --
+        # but a static value should never keep that poll alive by itself.
+        #
         # aiopppp reports None when the firmware doesn't actually store a
         # timezone, so the sensor simply isn't created for those cameras.
         value_fn=lambda props: props.get("tz"),

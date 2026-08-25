@@ -203,6 +203,13 @@ class PPPPDevice:
                     # forward instead of showing a frozen timestamp.
                     info["camera_time"] = dt.datetime.strptime(local, "%Y-%m-%d %H:%M:%S")
                     info["camera_time_read_at"] = time.monotonic()
+                # This same response carries the timezone, so keeping it costs
+                # nothing and lets the timezone entity refresh along with the
+                # clock. Only a real zone: firmwares that manage their own
+                # report a placeholder here, and the status block already
+                # reports None for those.
+                if decoded.get("layout") == "utc+tz" and (tz := decoded.get("tz")):
+                    info["tz"] = tz
             except Exception as err:  # noqa: BLE001 - optional, never fatal
                 LOGGER.debug("%s: datetime unavailable: %s", self.dev_id, err)
 
