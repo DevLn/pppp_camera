@@ -104,10 +104,12 @@
       "init": {
         "title": "Camera options",
         "data": {
-          "idle_disconnect_delay": "Idle disconnect delay (seconds)"
+          "idle_disconnect_delay": "Idle disconnect delay (seconds)",
+          "status_poll_interval": "Status poll interval (seconds)"
         },
         "data_description": {
-          "idle_disconnect_delay": "How long to keep the camera session warm after the last operation. 0 disconnects immediately."
+          "idle_disconnect_delay": "How long to keep the camera session warm after the last operation. 0 disconnects immediately.",
+          "status_poll_interval": "How often to refresh battery, power source and uptime. Each poll briefly connects to the camera, so keep it infrequent on battery-powered models. 0 disables polling."
         }
       }
     }

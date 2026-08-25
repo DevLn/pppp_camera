@@ -29,7 +29,9 @@ from .const import (
     CONF_INTERVAL,
     CONF_LAMP,
     CONF_IDLE_DISCONNECT_DELAY,
+    CONF_STATUS_POLL_INTERVAL,
     DEFAULT_IDLE_DISCONNECT_DELAY,
+    DEFAULT_STATUS_POLL_INTERVAL,
 )
 
 
@@ -63,6 +65,10 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Optional(
                     CONF_IDLE_DISCONNECT_DELAY,
                     default=DEFAULT_IDLE_DISCONNECT_DELAY,
+                ): vol.All(vol.Coerce(int), vol.Range(min=0)),
+                vol.Optional(
+                    CONF_STATUS_POLL_INTERVAL,
+                    default=DEFAULT_STATUS_POLL_INTERVAL,
                 ): vol.All(vol.Coerce(int), vol.Range(min=0)),
             }
         )

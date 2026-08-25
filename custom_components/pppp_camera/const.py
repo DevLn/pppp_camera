@@ -44,6 +44,7 @@ CONF_DURATION = "duration"
 CONF_INTERVAL = "interval"
 CONF_LAMP = "lamp"
 CONF_IDLE_DISCONNECT_DELAY = "idle_disconnect_delay"
+CONF_STATUS_POLL_INTERVAL = "status_poll_interval"
 
 # Maps a lamp entity key to the camera property that reports its on/off state.
 LAMP_STATE_PROPERTY = {"white_lamp": "lamp", "ir_lamp": "icut"}
@@ -53,3 +54,11 @@ LAMP_STATE_PROPERTY = {"white_lamp": "lamp", "ir_lamp": "icut"}
 # the session and avoids tearing the connection down before a fire-and-forget
 # command has been delivered. 0 disconnects immediately.
 DEFAULT_IDLE_DISCONNECT_DELAY = 5
+
+# How often to re-read the camera status block (battery, power source, uptime,
+# SD usage). Nothing is pushed by these cameras, so without this the values
+# stay frozen at whatever they were when the session first connected.
+#
+# Each poll opens a short session, so keep it infrequent: battery-powered
+# models can only sleep between connections. 0 disables polling entirely.
+DEFAULT_STATUS_POLL_INTERVAL = 300
