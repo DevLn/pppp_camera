@@ -35,11 +35,13 @@ from .const import (
     SOURCE_DISCOVERY_CONFIRM,
     CONF_IDLE_DISCONNECT_DELAY,
     CONF_STATUS_POLL_INTERVAL,
+    CONF_INFO_POLL_INTERVAL,
 )
 from .config_helpers import (
     get_defaults,
     get_idle_disconnect_delay,
     get_status_poll_interval,
+    get_info_poll_interval,
 )
 
 
@@ -286,6 +288,9 @@ class PPPPCameraOptionsFlowHandler(OptionsFlow):
         current_poll = self.config_entry.options.get(
             CONF_STATUS_POLL_INTERVAL, get_status_poll_interval(self.hass)
         )
+        current_info_poll = self.config_entry.options.get(
+            CONF_INFO_POLL_INTERVAL, get_info_poll_interval(self.hass)
+        )
         schema = vol.Schema(
             {
                 vol.Optional(
@@ -297,6 +302,13 @@ class PPPPCameraOptionsFlowHandler(OptionsFlow):
                 ),
                 vol.Optional(
                     CONF_STATUS_POLL_INTERVAL, default=current_poll
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=86400, step=1, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional(
+                    CONF_INFO_POLL_INTERVAL, default=current_info_poll
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=86400, step=1, mode=selector.NumberSelectorMode.BOX
