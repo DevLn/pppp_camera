@@ -70,8 +70,11 @@ CONFIG_SCHEMA = vol.Schema(
                 ): vol.All(vol.Coerce(int), vol.Range(min=0)),
                 vol.Optional(
                     CONF_STATUS_POLL_INTERVAL,
-    CONF_INFO_POLL_INTERVAL,
                     default=DEFAULT_STATUS_POLL_INTERVAL,
+                ): vol.All(vol.Coerce(int), vol.Range(min=0)),
+                vol.Optional(
+                    CONF_INFO_POLL_INTERVAL,
+                    default=DEFAULT_INFO_POLL_INTERVAL,
                 ): vol.All(vol.Coerce(int), vol.Range(min=0)),
             }
         )
@@ -100,6 +103,13 @@ pppp_camera:
         # if 'ip' is not specified, discovery will listen on all interfaces
     idle_disconnect_delay: 5    # seconds to keep a session warm after the last
                                 # operation (0 = disconnect immediately)
+    status_poll_interval: 300   # seconds between battery/uptime/SD refreshes
+                                # (0 = never poll)
+    info_poll_interval: 3600    # seconds between clock/SSID refreshes
+                                # (0 = never poll)
+
+All of these can also be set per camera in the integration's options, which
+takes precedence over the values here.
 """
 
 

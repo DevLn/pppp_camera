@@ -7,25 +7,34 @@ These cameras typically use the **Peer-to-Peer protocol** for communication, and
 
 ## Features
 
-- Supports A9, X5, and similar PPPP protocol cameras (Only JSON protocol is supported for now)
+- Supports A9, X5, and similar PPPP protocol cameras, over **both the JSON and
+  the binary control protocol** (binary is currently the better-tested path)
 - Live streaming via aiopppp
 - Snapshot support
-- PTZ control through actions/services
+- PTZ control through actions/services, including preset slots
 - White lights and IR lights control
+- **Talk-back**: play a media or TTS source through the camera speaker
+- Video resolution as a config entity (dropdown)
+- Diagnostic sensors: battery, power source, signal, uptime, SD card usage,
+  Wi-Fi network, camera clock offset and timezone
+- Camera clock sync button
+- On-demand connections — the camera is only held open while something needs
+  it, because these cameras accept **one client at a time**
 - Support for webrtc custom component
 - Automatic device discovery
-- (TBD) Sound streaming
+- (TBD) Listening to camera audio in Home Assistant — the library supports it,
+  but the HA camera entity streams video only
 
 ## Tested camera prefixes
 
-| Prefix   | Protocol | Video | [Audio<sup>*</sup>](https://github.com/devbis/aiopppp/issues/6) | PTZ | White Light | IR Light | Reboot |
-|:---------|:---------|:-----:|:---------------------------------------------------------------:|:---:|:-----------:|:--------:|:------:|
-| **DGOK** | 📜 JSON  | ✅   | ✖️                                                             | ✅  | ✅          | ✅      | ✅     |
-| **PTZA** | 🔢 Binary| ✅   | ✖️                                                             | ✅  | ✅          | 🚫      | ✅     |
-| **FTYC** | 🔢 Binary| [❌<sup>*</sup>](https://github.com/devbis/aiopppp/issues/8)| ✖️      | 🚫  | 🚫          | ✅      | ✅     |
-| [**BATE**<sup>*</sup>](https://github.com/devbis/pppp_camera/issues/4) | 🔢 Binary|❔ |✖️    | ❔   | ❔           | ❔       | ❔     |
-| [**DGB**<sup>*</sup>](https://github.com/devbis/pppp_camera/issues/2) | 📜 JSON   |⚠️ |✖️   | ❔   | ❔           | ❔       | ❔     |
-| [**ACCQ**<sup>*</sup>](https://github.com/devbis/pppp_camera/issues/1) | ❔ Unknown|✖️|✖️    | ✖️  | ✖️          | ✖️      | ✖️     |
+| Prefix   | Protocol | Video | Snapshot | PTZ | White Light | IR Light | Reboot | Resolution | Talk | Time sync |
+|:---------|:---------|:-----:|:--------:|:---:|:-----------:|:--------:|:------:|:----------:|:----:|:---------:|
+| **DGOK** | 📜 JSON  | ✅   | ✅      | ✅  | ✅          | ✅      | ✅     | ✖️        | ✖️  | ✖️       |
+| **PTZA** | 🔢 Binary| ✅   | ✅      | ✅  | ✅          | 🚫      | ✅     | ✅        | ✅  | ✅       |
+| **FTYC** | 🔢 Binary| ✅   | ✅      | 🚫  | 🚫          | ✅      | ✅     | ✅        | 🚫  | ⚠️       |
+| [**BATE**<sup>*</sup>](https://github.com/devbis/pppp_camera/issues/4) | 🔢 Binary|❔ |❔ | ❔   | ❔           | ❔       | ❔     |  ❔        | ❔  | ❔       |
+| [**DGB**<sup>*</sup>](https://github.com/devbis/pppp_camera/issues/2) | 📜 JSON   |⚠️ |❔ | ❔   | ❔           | ❔       | ❔     |  ❔        | ✖️  | ✖️       |
+| [**ACCQ**<sup>*</sup>](https://github.com/devbis/pppp_camera/issues/1) | ❔ Unknown|✖️|✖️ | ✖️  | ✖️          | ✖️      | ✖️     | ✖️        | ✖️  | ✖️       |
 
 **Legend:**
 - &nbsp;✅&nbsp; **Working**: Feature is fully functional.
@@ -34,6 +43,70 @@ These cameras typically use the **Peer-to-Peer protocol** for communication, and
 - &nbsp;✖️&nbsp; **Not implemented**: Feature is not implemented in the system.
 - &nbsp;🚫&nbsp; **Not supported**: Feature is not supported by the device.
 - &ensp;❔ &nbsp; **Not tested**: Feature has not been tested on the device.
+
+Notes: FTYC has no speaker, so talk-back cannot be tested there. FTYC time
+sync sets the clock but has no timezone field to write, so its UTC offset
+stays whatever the vendor app configured. JSON cameras expose no set-time
+command. PTZ presets are sent using the scheme found in the vendor app, but
+none of the tested cameras act on them — see
+[services](#services) below.
+
+> **Status:** the capability matrix above is what the underlying `aiopppp`
+> library was verified to do against real cameras. The newer Home Assistant
+> entities built on top of it (diagnostic sensors, resolution select, talk
+> service, clock sync) are implemented but **have not yet been exercised in a
+> running Home Assistant** — treat that side as untested.
+
+## Entities
+
+One device is created per camera. Which entities appear depends on what the
+camera actually reports, so a mains-powered camera gets no battery sensor and a
+camera without an SD card gets no usage sensor.
+
+| Entity | Platform | Notes |
+|:-------|:---------|:------|
+| Camera | `camera` | Live stream, snapshots, and turn on/off (starts and stops the video stream) |
+| White Lamp / IR Lamp | `switch`, `light` or `button` | Only for cameras reporting that lamp. The platform is chosen by the `platform.lamp` option |
+| Reboot | `button` | Always available |
+| Sync time | `button` | Binary-protocol cameras only |
+| Resolution | `select` | Binary-protocol cameras only. QVGA / VGA / HD / FD / UD |
+| Battery | `sensor` | Only when the camera reports a real battery voltage |
+| Power source | `sensor` | External or Battery. Only alongside a battery reading — mains-only cameras leave the field unpopulated rather than reporting "external" |
+| Clock offset | `sensor` | Seconds the camera clock is ahead (+) or behind (−) Home Assistant, with the raw camera time as an attribute |
+| Wi-Fi network | `sensor` | SSID the camera is joined to |
+| Timezone | `sensor` | Disabled by default. Not created for firmwares that don't store one |
+| Signal strength | `sensor` | Disabled by default |
+| Uptime | `sensor` | Disabled by default. Hidden entirely when the firmware reports a nonsense value |
+| SD card usage | `sensor` | Disabled by default. Only when a card is present |
+
+All sensors are diagnostic entities; the resolution select and the reboot/sync
+buttons are config entities.
+
+### Polling
+
+These cameras push nothing, and only one client may be connected at a time, so
+values are refreshed by briefly opening a session on a timer. Polling is
+**demand-driven**: a group of values is only fetched while at least one enabled
+entity actually uses it.
+
+| Group | Values | Default interval |
+|:------|:-------|:-----------------|
+| Status | Battery, power source, uptime, SD usage | 300 s |
+| Info | Camera clock offset, Wi-Fi SSID | 3600 s |
+
+So a camera with no battery and no SD card is never status-polled, and
+disabling those entities stops the polling too. Set either interval to `0` to
+disable it outright. The timezone sensor never triggers a poll of its own — it
+rides along on the clock response, which already carries it.
+
+## Services
+
+| Service | Description |
+|:--------|:------------|
+| `pppp_camera.ptz` | Pan (`LEFT`/`RIGHT`) or tilt (`UP`/`DOWN`) the camera |
+| `pppp_camera.ptz_preset` | Move to (`goto`) or store (`set`) a preset slot, 0–255. Implemented from the vendor app, but **no tested camera acts on it** |
+| `pppp_camera.reboot` | Reboot the camera |
+| `pppp_camera.talk` | Play an audio media or TTS source through the camera speaker |
 
 ## Installation
 
@@ -54,6 +127,10 @@ Or manually copy pppp_camera folder to custom_components folder in your config f
 
 Add cameras through Home Assistant's **Devices & Services** interface by camera IP address. 
 If username and passwords are blank, it will use default values for authentication: `admin:6666`.
+
+Per-camera settings (connection and polling behaviour) are available afterwards
+via **Configure** on the integration entry, and override the YAML defaults
+below.
 
 ### Advanced YAML Configuration (Optional)
 
@@ -78,6 +155,8 @@ pppp_camera:
     ip: 192.168.1.255
     # if 'ip' is not specified, discovery will listen on all interfaces
   idle_disconnect_delay: 5    # seconds to keep a session warm after the last operation
+  status_poll_interval: 300   # seconds between battery/uptime/SD refreshes
+  info_poll_interval: 3600    # seconds between clock/SSID refreshes
 ```
 
 ### Configuration Parameters
@@ -116,6 +195,22 @@ Configure automatic device discovery on your network.
   the session and prevents a fire-and-forget command from being cut off by an
   immediate disconnect. Set to `0` to disconnect immediately after each operation.
 
+#### `status_poll_interval` (optional)
+
+- **`status_poll_interval`** (integer, default: `300`): Seconds between refreshes
+  of battery, power source, uptime and SD card usage. Only polled while at least
+  one of those entities is enabled, so a camera without a battery or SD card is
+  never contacted for them. Set to `0` to disable.
+
+#### `info_poll_interval` (optional)
+
+- **`info_poll_interval`** (integer, default: `3600`): Seconds between refreshes
+  of the camera clock and Wi-Fi network. These barely change — the SSID only when
+  the camera is re-provisioned — so this is deliberately much slower than the
+  status poll. Set to `0` to disable.
+
+All four of the above can also be set per camera from the integration's
+**Configure** dialog, which takes precedence over the YAML values.
 
 ## Usage
 
@@ -133,6 +228,17 @@ target:
   entity_id: camera.dgok_123456_xxxxx
 ```
 
+Talk-back plays any media or TTS source through the camera speaker:
+
+```yaml
+action: pppp_camera.talk
+data:
+  media:
+    media_content_id: media-source://tts/tts.google_en_com?message=Someone+is+at+the+door
+    media_content_type: provider
+target:
+  entity_id: camera.ptza_123456_xxxxx
+```
 
 ## WebRTC component configuration example:
 
@@ -174,6 +280,15 @@ shortcuts:
 
 - **Camera not connecting?** Ensure IP is correct and phone application is not connected. Only one client can connect.
 - **No video stream?** Sometimes camera doesn't start streaming. Reboot it.  
+- **Resolution shows as unknown?** The camera only reports its real video
+  parameters while it is streaming; an idle camera answers with an empty table.
+  Start the stream and the value fills in a couple of seconds later.
+- **Clock offset looks stale after pressing Sync time?** The value is re-read a
+  moment after the write. If that read-back doesn't land, the next info poll
+  replaces it with a genuine reading.
+- **Missing sensors?** Most are conditional (see [Entities](#entities)), and
+  signal / uptime / SD usage / timezone are disabled by default — enable them
+  from the device page.
 
 ## Contributing
 
