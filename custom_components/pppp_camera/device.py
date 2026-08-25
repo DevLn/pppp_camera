@@ -480,15 +480,15 @@ class PPPPDevice:
                 raise HomeAssistantError("This camera does not support setting the time")
             # The camera stores the timezone as seconds WEST of UTC; passing
             # the east-positive offset here inverted every sync (UTC+3 became
-            # UTC-3). aiopppp>=0.4.0 computes the correct wire value itself
+            # UTC-3). aiopppp>=0.3.0 computes the correct wire value itself
             # when tz_seconds is left unset, so don't second-guess it.
             now = dt_util.now()
             await set_datetime(now)
 
-            # Re-read the clock we just set. The camera-time sensor projects
-            # its last reading forward, so without this it would keep counting
-            # up from the pre-sync value -- showing the old (wrong) time as if
-            # the sync had done nothing, until the next info poll an hour on.
+            # Re-read the clock we just set. The clock-offset sensor reports
+            # the difference measured at the last reading, so without this it
+            # would keep showing the pre-sync offset -- as if the sync had done
+            # nothing -- until the next info poll an hour on.
             #
             # set_datetime() already issued its own read, and these cameras
             # drop commands that arrive back-to-back, so let it settle first.
@@ -498,9 +498,8 @@ class PPPPDevice:
 
             if self.extra_info.get("camera_time_read_at") == read_at:
                 # The read-back didn't land. We still know what we just wrote,
-                # and anything is better than continuing to count up from the
-                # pre-sync value; the next info poll replaces this with a
-                # genuine reading.
+                # and that beats leaving the stale pre-sync offset on display;
+                # the next info poll replaces this with a genuine reading.
                 LOGGER.debug("%s: clock read-back after sync failed; assuming the "
                              "value just written", self.dev_id)
                 self.extra_info["camera_time"] = now.replace(tzinfo=None)
