@@ -103,7 +103,7 @@ pppp_camera:
         # if 'ip' is not specified, discovery will listen on all interfaces
     idle_disconnect_delay: 5    # seconds to keep a session warm after the last
                                 # operation (0 = disconnect immediately)
-    status_poll_interval: 300   # seconds between battery/uptime/SD refreshes
+    status_poll_interval: 300   # seconds between battery/signal/SD refreshes
                                 # (0 = never poll)
     info_poll_interval: 3600    # seconds between clock/SSID refreshes
                                 # (0 = never poll)

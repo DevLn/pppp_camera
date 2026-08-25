@@ -37,9 +37,6 @@
       "signal": {
         "name": "Signal strength"
       },
-      "uptime": {
-        "name": "Uptime"
-      },
       "power_source": {
         "name": "Power source",
         "state": {
@@ -110,7 +107,7 @@
         },
         "data_description": {
           "idle_disconnect_delay": "How long to keep the camera session warm after the last operation. 0 disconnects immediately.",
-          "status_poll_interval": "How often to refresh battery, uptime and SD usage. Only polled while at least one of those entities is enabled, so a camera without a battery or SD card is never contacted. 0 disables polling.",
+          "status_poll_interval": "How often to refresh battery, signal strength and SD usage. Only polled while at least one of those entities is enabled, so a camera without a battery or SD card is never contacted. 0 disables polling.",
           "info_poll_interval": "How often to refresh the camera clock and Wi-Fi network. These rarely change, so this can be long. 0 disables polling."
         }
       }

@@ -295,7 +295,7 @@ class PPPPDevice:
         async_dispatcher_send(self.hass, self.signal_available)
 
     async def async_refresh_status(self) -> None:
-        """Re-read the status block (battery, power source, uptime, SD usage).
+        """Re-read the status block (battery, power source, signal, SD usage).
 
         The cameras never push updates and the library only reads the status
         once, during session setup, so these values would otherwise stay frozen

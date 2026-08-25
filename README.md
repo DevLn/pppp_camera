@@ -16,7 +16,7 @@ These cameras typically use the **Peer-to-Peer protocol** for communication, and
 - **Talk-back**: play a media or TTS source through the camera speaker
 - Video resolution as a config entity (dropdown) — see
   [Known issues](#known-issues)
-- Diagnostic sensors: battery, power source, signal, uptime, SD card usage,
+- Diagnostic sensors: battery, power source, Wi-Fi signal, SD card usage,
   Wi-Fi network, camera clock offset and timezone
 - Camera clock sync button
 - On-demand connections — the camera is only held open while something needs
@@ -93,8 +93,7 @@ camera without an SD card gets no usage sensor.
 | Clock offset | `sensor` | Seconds the camera clock is ahead (+) or behind (−) Home Assistant, with the raw camera time as an attribute |
 | Wi-Fi network | `sensor` | SSID the camera is joined to |
 | Timezone | `sensor` | Disabled by default. Not created for firmwares that don't store one |
-| Signal strength | `sensor` | Disabled by default |
-| Uptime | `sensor` | Disabled by default. Hidden entirely when the firmware reports a nonsense value |
+| Signal strength | `sensor` | Wi-Fi RSSI in dBm. Disabled by default. Not created when the firmware reports no usable value |
 | SD card usage | `sensor` | Disabled by default. Only when a card is present |
 
 All sensors are diagnostic entities; the resolution select and the reboot/sync
@@ -109,7 +108,7 @@ entity actually uses it.
 
 | Group | Values | Default interval |
 |:------|:-------|:-----------------|
-| Status | Battery, power source, uptime, SD usage | 300 s |
+| Status | Battery, power source, signal strength, SD usage | 300 s |
 | Info | Camera clock offset, Wi-Fi SSID | 3600 s |
 
 So a camera with no battery and no SD card is never status-polled, and
@@ -173,7 +172,7 @@ pppp_camera:
     ip: 192.168.1.255
     # if 'ip' is not specified, discovery will listen on all interfaces
   idle_disconnect_delay: 5    # seconds to keep a session warm after the last operation
-  status_poll_interval: 300   # seconds between battery/uptime/SD refreshes
+  status_poll_interval: 300   # seconds between battery/signal/SD refreshes
   info_poll_interval: 3600    # seconds between clock/SSID refreshes
 ```
 
@@ -216,7 +215,7 @@ Configure automatic device discovery on your network.
 #### `status_poll_interval` (optional)
 
 - **`status_poll_interval`** (integer, default: `300`): Seconds between refreshes
-  of battery, power source, uptime and SD card usage. Only polled while at least
+  of battery, power source, signal strength and SD card usage. Only polled while at least
   one of those entities is enabled, so a camera without a battery or SD card is
   never contacted for them. Set to `0` to disable.
 
@@ -314,7 +313,7 @@ shortcuts:
   moment after the write. If that read-back doesn't land, the next info poll
   replaces it with a genuine reading.
 - **Missing sensors?** Most are conditional (see [Entities](#entities)), and
-  signal / uptime / SD usage / timezone are disabled by default — enable them
+  signal / SD usage / timezone are disabled by default — enable them
   from the device page.
 - **Talk-back does nothing?** The action now fails loudly with ffmpeg's own
   error when the media can't be decoded. If it reports that the URL could not
