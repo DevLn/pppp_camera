@@ -174,12 +174,17 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         key="device_type",
         translation_key="device_type",
         entity_category=EntityCategory.DIAGNOSTIC,
-        # Off by default: the same string is already the device's Model, so
+        # Off by default: the same string is already on the device page, so
         # this exists for the raw numbers behind it, in the attributes.
         entity_registry_enabled_default=False,
-        # No poll_group -- a camera's model doesn't change.
+        # No poll_group -- a camera's type doesn't change.
         value_fn=format_device_type,
-        supported_fn=lambda props: format_device_type(props) is not None,
+        # Keyed on the raw values, not the rendered name: a camera whose type
+        # aiopppp can't name is exactly the one whose numbers are worth having.
+        # The state is then "unknown" while the attributes still carry them.
+        supported_fn=lambda props: (
+            props.get("devType") is not None or props.get("chipType") is not None
+        ),
         attrs_fn=_device_type_attrs,
     ),
 )

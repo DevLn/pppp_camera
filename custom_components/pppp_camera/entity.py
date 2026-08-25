@@ -17,24 +17,16 @@ from .device import PPPPDevice
 
 
 def format_device_type(properties: dict[str, Any]) -> str | None:
-    """Render the camera's model as "XR_PTZ (TX)".
+    """Render the camera's type as "DevType/ChipType", e.g. "XR_PTZ/TX_817_810".
 
-    Falls back to the raw number for either half when aiopppp has no name for
-    it -- "XR_PTZ (chip 2)" -- because the enums are transcribed from the vendor
-    apps and are known to be incomplete. Returns None when the camera reports
-    neither, which is the case for JSON cameras.
+    Names only. aiopppp's enums are transcribed from the vendor apps and are
+    incomplete, so a half it can't name (PTZA's chip 2) is dropped rather than
+    shown as a bare number -- "XR_PTZ". Returns None when neither half has a
+    name, including for JSON cameras, which report no type at all. The raw
+    numbers stay available on the device_type sensor's attributes.
     """
-    dev_type = properties.get("devType")
-    chip_type = properties.get("chipType")
-    dev = properties.get("devTypeName") or (
-        f"type {dev_type}" if dev_type is not None else None
-    )
-    chip = properties.get("chipTypeName") or (
-        f"chip {chip_type}" if chip_type is not None else None
-    )
-    if dev and chip:
-        return f"{dev} ({chip})"
-    return dev or chip
+    names = [properties.get("devTypeName"), properties.get("chipTypeName")]
+    return "/".join(name for name in names if name) or None
 
 
 class PPPPBaseEntity(Entity):
@@ -78,9 +70,11 @@ class PPPPBaseEntity(Entity):
         camera_properties = self.device.device.properties
         return DeviceInfo(
             identifiers={(DOMAIN, self.device.dev_id)},
-            # Device type and chip, e.g. "XR_PTZ (chip 2)". Falls back to the
-            # device id for cameras that report neither.
-            model=format_device_type(camera_properties) or self.device.dev_id,
+            model=self.device.dev_id,
+            # No real manufacturer is discoverable over PPPP, so the field is
+            # reused for the camera's type, e.g. "XR_PTZ/TX_817_810". None
+            # (leaving it unset) for cameras that report no named type.
+            manufacturer=format_device_type(camera_properties),
             model_id=camera_properties.get('sensor'),
             serial_number=self.device.dev_id,
             hw_version=camera_properties.get('mcuver'),
