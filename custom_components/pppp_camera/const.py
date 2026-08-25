@@ -45,6 +45,14 @@ CONF_INTERVAL = "interval"
 CONF_LAMP = "lamp"
 CONF_IDLE_DISCONNECT_DELAY = "idle_disconnect_delay"
 CONF_STATUS_POLL_INTERVAL = "status_poll_interval"
+CONF_INFO_POLL_INTERVAL = "info_poll_interval"
+
+# Poll groups. Entities register the group they read from when they are added
+# to Home Assistant, and a group is only polled while something is actually
+# using it -- a camera with no battery and no SD card never gets a status
+# poll, and disabling those entities stops it too.
+POLL_GROUP_STATUS = "status"
+POLL_GROUP_INFO = "info"
 
 # Maps a lamp entity key to the camera property that reports its on/off state.
 LAMP_STATE_PROPERTY = {"white_lamp": "lamp", "ir_lamp": "icut"}
@@ -55,10 +63,15 @@ LAMP_STATE_PROPERTY = {"white_lamp": "lamp", "ir_lamp": "icut"}
 # command has been delivered. 0 disconnects immediately.
 DEFAULT_IDLE_DISCONNECT_DELAY = 5
 
-# How often to re-read the camera status block (battery, power source, uptime,
-# SD usage). Nothing is pushed by these cameras, so without this the values
-# stay frozen at whatever they were when the session first connected.
+# How often to re-read the camera status block (battery, uptime, SD usage).
+# Nothing is pushed by these cameras, so without this the values stay frozen
+# at whatever they were when the session first connected.
 #
 # Each poll opens a short session, so keep it infrequent: battery-powered
 # models can only sleep between connections. 0 disables polling entirely.
 DEFAULT_STATUS_POLL_INTERVAL = 300
+
+# How often to re-read values that need their own commands (camera clock,
+# Wi-Fi SSID). These barely change -- the SSID only when the camera is
+# re-provisioned -- so this is deliberately much slower than the status poll.
+DEFAULT_INFO_POLL_INTERVAL = 3600

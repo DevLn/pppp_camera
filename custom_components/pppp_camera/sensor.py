@@ -24,7 +24,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, POLL_GROUP_INFO, POLL_GROUP_STATUS
 from .device import PPPPDevice
 from .entity import PPPPBaseEntity
 
@@ -47,6 +47,9 @@ class PPPPSensorEntityDescription(SensorEntityDescription):
     # Re-render on HA's poll interval. Only for values derived from elapsed
     # time (the camera clock); polling never touches the camera itself.
     poll: bool = False
+    # Which device poll group keeps this value fresh. None for values that
+    # never change (timezone), so they never cause a camera round trip.
+    poll_group: str | None = None
 
 
 def _camera_time(props: dict[str, Any]) -> str | None:
@@ -69,6 +72,7 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
     PPPPSensorEntityDescription(
         key="battery",
         translation_key="battery",
+        poll_group=POLL_GROUP_STATUS,
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -94,6 +98,7 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
     PPPPSensorEntityDescription(
         key="uptime",
         translation_key="uptime",
+        poll_group=POLL_GROUP_STATUS,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -107,6 +112,7 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
     PPPPSensorEntityDescription(
         key="power_source",
         translation_key="power_source",
+        poll_group=POLL_GROUP_STATUS,
         device_class=SensorDeviceClass.ENUM,
         options=["external", "battery"],
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -122,6 +128,7 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
     PPPPSensorEntityDescription(
         key="sd_usage",
         translation_key="sd_usage",
+        poll_group=POLL_GROUP_STATUS,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -148,6 +155,7 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
     PPPPSensorEntityDescription(
         key="camera_time",
         translation_key="camera_time",
+        poll_group=POLL_GROUP_INFO,
         entity_category=EntityCategory.DIAGNOSTIC,
         poll=True,
         value_fn=_camera_time,
@@ -156,6 +164,7 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
     PPPPSensorEntityDescription(
         key="ssid",
         translation_key="ssid",
+        poll_group=POLL_GROUP_INFO,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda props: props.get("ssid"),
         supported_fn=lambda props: bool(props.get("ssid")),
@@ -202,6 +211,18 @@ class PPPPSensor(PPPPBaseEntity, SensorEntity):
         self._attr_unique_id = f"{self.device.dev_id}_{description.key}"
         # Overrides the base class's push-only default for time-derived values.
         self._attr_should_poll = description.poll
+
+    async def async_added_to_hass(self) -> None:
+        """Claim the poll group this sensor's value comes from.
+
+        Only enabled entities are ever added, so claiming here is what keeps
+        the camera from being polled for data nobody is displaying.
+        """
+        await super().async_added_to_hass()
+        if self.entity_description.poll_group:
+            self.async_on_remove(
+                self.device.register_poll_group(self.entity_description.poll_group)
+            )
 
     async def async_update(self) -> None:
         """Re-render only. Polling must never reach out to the camera: these

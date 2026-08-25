@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import datetime as dt
 import time
+from collections.abc import Callable
 
 import aiopppp
 from homeassistant.config_entries import ConfigEntry
@@ -20,8 +21,12 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
-from .config_helpers import get_idle_disconnect_delay, get_status_poll_interval
-from .const import DOMAIN, LOGGER
+from .config_helpers import (
+    get_idle_disconnect_delay,
+    get_info_poll_interval,
+    get_status_poll_interval,
+)
+from .const import DOMAIN, LOGGER, POLL_GROUP_INFO, POLL_GROUP_STATUS
 
 
 class PPPPDevice:
@@ -51,7 +56,10 @@ class PPPPDevice:
         self._idle_unload_task: asyncio.Task | None = None
         self._idle_disconnect_delay: int = get_idle_disconnect_delay(hass, config_entry)
         self._status_poll_interval: int = get_status_poll_interval(hass, config_entry)
-        self._status_poll_task: asyncio.Task | None = None
+        self._info_poll_interval: int = get_info_poll_interval(hass, config_entry)
+        self._poll_tasks: list[asyncio.Task] = []
+        # Live entity count per poll group; a group with none is never polled.
+        self._poll_consumers: dict[str, int] = {}
 
         # Entities subscribe to these signals to refresh availability / stream state.
         self.signal_available = f"{DOMAIN}_{config_entry.entry_id}_available"
@@ -159,8 +167,8 @@ class PPPPDevice:
             self.info = self.device.properties
             await self._async_fetch_extra_info()
 
-        self._start_status_poll()
-        self.config_entry.async_on_unload(self._stop_status_poll)
+        self._start_polling()
+        self.config_entry.async_on_unload(self._stop_polling)
 
         self.config_entry.async_on_unload(
             self.config_entry.add_update_listener(self._async_update_listener)
@@ -168,7 +176,7 @@ class PPPPDevice:
 
     async def async_stop(self, event=None):
         """Shut it all down."""
-        self._stop_status_poll()
+        self._stop_polling()
         async with self._lock:
             self._cancel_idle_unload()
             self._connected_num = 0
@@ -278,31 +286,62 @@ class PPPPDevice:
             await self._async_fetch_extra_info()
         async_dispatcher_send(self.hass, self.signal_available)
 
-    async def _status_poll_loop(self) -> None:
-        """Refresh the status on a fixed interval until cancelled."""
+    @callback
+    def register_poll_group(self, group: str) -> Callable[[], None]:
+        """Declare that a live entity reads from `group`, and return the
+        function that releases it again.
+
+        Home Assistant never adds disabled entities, so counting registrations
+        is enough to know whether anything actually needs the data: a camera
+        with no battery and no SD card creates none of those sensors, and
+        disabling them releases the group. Either way the group stops being
+        polled.
+        """
+        self._poll_consumers[group] = self._poll_consumers.get(group, 0) + 1
+
+        @callback
+        def release() -> None:
+            self._poll_consumers[group] = max(0, self._poll_consumers.get(group, 0) - 1)
+
+        return release
+
+    async def _poll_loop(self, group: str, interval: int, refresh) -> None:
+        """Refresh `group` every `interval` seconds while it has consumers."""
         while True:
             try:
-                await asyncio.sleep(self._status_poll_interval)
-                await self.async_refresh_status()
+                await asyncio.sleep(interval)
+                if not self._poll_consumers.get(group):
+                    # Nothing is using this data; skip the round trip entirely
+                    # rather than waking the camera for values nobody reads.
+                    continue
+                await refresh()
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001 - a poll failure is not fatal
                 # An unreachable camera is already reflected by availability;
                 # keep polling so the values recover on their own.
-                LOGGER.debug("%s: status poll failed: %s", self.dev_id, err)
+                LOGGER.debug("%s: %s poll failed: %s", self.dev_id, group, err)
 
-    def _start_status_poll(self) -> None:
-        if not self._status_poll_interval:
-            LOGGER.debug("%s: status polling disabled", self.dev_id)
-            return
-        self._status_poll_task = self.hass.async_create_background_task(
-            self._status_poll_loop(), f"{DOMAIN}_status_poll_{self.dev_id}"
-        )
+    def _start_polling(self) -> None:
+        for group, interval, refresh in (
+            (POLL_GROUP_STATUS, self._status_poll_interval, self.async_refresh_status),
+            (POLL_GROUP_INFO, self._info_poll_interval, self.async_refresh_extra_info),
+        ):
+            if not interval:
+                LOGGER.debug("%s: %s polling disabled", self.dev_id, group)
+                continue
+            self._poll_tasks.append(
+                self.hass.async_create_background_task(
+                    self._poll_loop(group, interval, refresh),
+                    f"{DOMAIN}_{group}_poll_{self.dev_id}",
+                )
+            )
 
-    def _stop_status_poll(self) -> None:
-        if self._status_poll_task and not self._status_poll_task.done():
-            self._status_poll_task.cancel()
-        self._status_poll_task = None
+    def _stop_polling(self) -> None:
+        for task in self._poll_tasks:
+            if not task.done():
+                task.cancel()
+        self._poll_tasks = []
 
     async def async_set_resolution(self, value: str) -> None:
         """Set the video resolution and remember the new value."""
