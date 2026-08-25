@@ -26,7 +26,13 @@ from .config_helpers import (
     get_info_poll_interval,
     get_status_poll_interval,
 )
-from .const import DOMAIN, LOGGER, POLL_GROUP_INFO, POLL_GROUP_STATUS
+from .const import (
+    DOMAIN,
+    LOGGER,
+    POLL_GROUP_INFO,
+    POLL_GROUP_STATUS,
+    SYNC_READBACK_DELAY,
+)
 
 
 class PPPPDevice:
@@ -186,13 +192,17 @@ class PPPPDevice:
         """Read values that aren't part of the status block.
 
         Every one of these is optional: cameras answer a different subset
-        (and some answer none), so each failure is recorded as a missing key
-        rather than aborting setup. Must be called with a live connection.
+        (and some answer none), so each failure leaves the previous value in
+        place rather than aborting setup. Must be called with a live
+        connection.
         """
         from aiopppp.packets import parse_datetime_block, parse_wifi_settings
 
         session = self.device.session
-        info: dict = {}
+        # Start from what we already know: these cameras drop commands issued
+        # in quick succession, and a single timeout must not blank a sensor
+        # that was reading fine a moment ago.
+        info: dict = dict(self.extra_info)
 
         if (get_datetime := getattr(session, "get_datetime", None)) is not None:
             try:
@@ -225,12 +235,8 @@ class PPPPDevice:
         # camera answers VIDEOPARAM_GET with an all-zero table, which would
         # read back as a confident (and wrong) QVGA. Keep whatever we already
         # know instead, and refresh once streaming starts.
-        if (previous := self.extra_info.get("resolution")) is not None:
-            info["resolution"] = previous
-        if self._is_streaming:
-            info.pop("resolution", None)
-            if (value := await self._async_read_resolution()) is not None:
-                info["resolution"] = value
+        if self._is_streaming and (value := await self._async_read_resolution()) is not None:
+            info["resolution"] = value
 
         self.extra_info = info
 
@@ -461,7 +467,30 @@ class PPPPDevice:
             # the east-positive offset here inverted every sync (UTC+3 became
             # UTC-3). aiopppp>=0.4.0 computes the correct wire value itself
             # when tz_seconds is left unset, so don't second-guess it.
-            await set_datetime(dt_util.now())
+            now = dt_util.now()
+            await set_datetime(now)
+
+            # Re-read the clock we just set. The camera-time sensor projects
+            # its last reading forward, so without this it would keep counting
+            # up from the pre-sync value -- showing the old (wrong) time as if
+            # the sync had done nothing, until the next info poll an hour on.
+            #
+            # set_datetime() already issued its own read, and these cameras
+            # drop commands that arrive back-to-back, so let it settle first.
+            read_at = self.extra_info.get("camera_time_read_at")
+            await asyncio.sleep(SYNC_READBACK_DELAY)
+            await self._async_fetch_extra_info()
+
+            if self.extra_info.get("camera_time_read_at") == read_at:
+                # The read-back didn't land. We still know what we just wrote,
+                # and anything is better than continuing to count up from the
+                # pre-sync value; the next info poll replaces this with a
+                # genuine reading.
+                LOGGER.debug("%s: clock read-back after sync failed; assuming the "
+                             "value just written", self.dev_id)
+                self.extra_info["camera_time"] = now.replace(tzinfo=None)
+                self.extra_info["camera_time_read_at"] = time.monotonic()
+        async_dispatcher_send(self.hass, self.signal_available)
 
 
     @contextlib.asynccontextmanager

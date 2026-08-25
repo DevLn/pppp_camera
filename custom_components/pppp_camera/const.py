@@ -75,3 +75,8 @@ DEFAULT_STATUS_POLL_INTERVAL = 300
 # Wi-Fi SSID). These barely change -- the SSID only when the camera is
 # re-provisioned -- so this is deliberately much slower than the status poll.
 DEFAULT_INFO_POLL_INTERVAL = 3600
+
+# Pause between setting the camera clock and reading it back. These cameras
+# ignore commands that arrive immediately after another, and set_datetime()
+# already performs a read of its own.
+SYNC_READBACK_DELAY = 2.0
