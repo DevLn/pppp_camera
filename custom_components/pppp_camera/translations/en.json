@@ -53,11 +53,11 @@
       "timezone": {
         "name": "Timezone"
       },
-      "camera_time": {
-        "name": "Camera time"
-      },
       "ssid": {
         "name": "Wi-Fi network"
+      },
+      "clock_offset": {
+        "name": "Clock offset"
       }
     },
     "select": {
