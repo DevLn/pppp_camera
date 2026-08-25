@@ -84,8 +84,8 @@ camera without an SD card gets no usage sensor.
 | Entity | Platform | Notes |
 |:-------|:---------|:------|
 | Camera | `camera` | Live stream, snapshots, and turn on/off (starts and stops the video stream) |
-| White Lamp / IR Lamp | `switch`, `light` or `button` | Only for cameras reporting that lamp. The platform is chosen by the `platform.lamp` option |
-| Reboot | `button` | Always available |
+| White Lamp / IR Lamp | `switch`, `light` or `button` | Only for cameras reporting that lamp. The platform is chosen by the `platform.lamp` option. Cameras that report real lamp state (function bitmap in the status block) track it live, so changes made from the vendor app show up; the rest assume their own writes |
+| Reboot | `button` | Only when logged in — the camera refuses it otherwise |
 | Sync time | `button` | Binary-protocol cameras only |
 | Resolution | `select` | Binary-protocol cameras only. QVGA / VGA / HD / FD / UD |
 | Battery | `sensor` | Only when the camera reports a real battery voltage |
@@ -95,6 +95,7 @@ camera without an SD card gets no usage sensor.
 | Timezone | `sensor` | Disabled by default. Not created for firmwares that don't store one |
 | Signal strength | `sensor` | Wi-Fi RSSI in dBm. Disabled by default. Not created when the firmware reports no usable value |
 | SD card usage | `sensor` | Disabled by default. Only when a card is present |
+| Device type | `sensor` | Disabled by default. Model and chip, e.g. `XR_PTZ (chip 2)` — the same string as the device's Model, with `devType`/`devTypeName`/`chipType`/`chipTypeName` as attributes |
 
 All sensors are diagnostic entities; the resolution select and the reboot/sync
 buttons are config entities.
