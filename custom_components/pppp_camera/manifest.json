@@ -6,6 +6,6 @@
   "dependencies": ["ffmpeg"],
   "iot_class": "local_polling",
   "loggers": ["aiopppp"],
-  "requirements": ["aiopppp==0.4.0"],
-  "version": "1.3.0"
+  "requirements": ["aiopppp==0.3.0"],
+  "version": "1.2.0"
 }
