@@ -240,6 +240,13 @@ target:
   entity_id: camera.ptza_123456_xxxxx
 ```
 
+The easiest way to try it is **Developer tools → Actions → Talk**, picking a
+short file with the media browser (anything ffmpeg can decode works; it is
+transcoded to the 8 kHz mono the camera expects). Note that the action runs for
+as long as the audio lasts — it is streamed to the camera in real time — so
+test with a few seconds of audio rather than a full song. The camera must
+actually have a speaker; not all models do.
+
 ## WebRTC component configuration example:
 
 Component project page: https://github.com/AlexxIT/WebRTC
@@ -289,6 +296,10 @@ shortcuts:
 - **Missing sensors?** Most are conditional (see [Entities](#entities)), and
   signal / uptime / SD usage / timezone are disabled by default — enable them
   from the device page.
+- **Talk-back does nothing?** The action now fails loudly with ffmpeg's own
+  error when the media can't be decoded. If it reports that the URL could not
+  be fetched, check that Home Assistant's internal URL is reachable from
+  itself, since the audio is pulled back over HTTP before being transcoded.
 
 ## Contributing
 
