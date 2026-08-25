@@ -208,11 +208,9 @@ class PPPPDevice:
             try:
                 decoded = parse_datetime_block(await get_datetime(timeout=4))
                 if local := decoded.get("local"):
-                    # Store the camera clock together with the monotonic
-                    # instant it was read, so the sensor can project it
-                    # forward instead of showing a frozen timestamp.
                     info["camera_time"] = dt.datetime.strptime(local, "%Y-%m-%d %H:%M:%S")
                     info["camera_time_read_at"] = time.monotonic()
+                    info["clock_offset"] = self._clock_offset(decoded, info["camera_time"])
                 # This same response carries the timezone, so keeping it costs
                 # nothing and lets the timezone entity refresh along with the
                 # clock. Only a real zone: firmwares that manage their own
@@ -239,6 +237,23 @@ class PPPPDevice:
             info["resolution"] = value
 
         self.extra_info = info
+
+    @staticmethod
+    def _clock_offset(decoded: dict, camera_time: dt.datetime) -> int:
+        """Seconds the camera clock is ahead of (+) or behind (-) Home Assistant.
+
+        Measured against whichever notion of time the firmware actually keeps,
+        so a camera configured for a different timezone doesn't look broken:
+
+        - Firmwares that store a real UTC timestamp are compared as instants,
+          which ignores the timezone label entirely.
+        - Firmwares that only keep local wall-clock time (no timezone field)
+          are compared against Home Assistant's local time, the only common
+          ground available.
+        """
+        if decoded.get("layout") == "utc+tz" and (ts := decoded.get("timestamp")):
+            return round(ts - dt_util.utcnow().timestamp())
+        return round((camera_time - dt_util.now().replace(tzinfo=None)).total_seconds())
 
     @property
     def _is_streaming(self) -> bool:
@@ -490,6 +505,7 @@ class PPPPDevice:
                              "value just written", self.dev_id)
                 self.extra_info["camera_time"] = now.replace(tzinfo=None)
                 self.extra_info["camera_time_read_at"] = time.monotonic()
+                self.extra_info["clock_offset"] = 0
         async_dispatcher_send(self.hass, self.signal_available)
 
 

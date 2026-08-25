@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -44,28 +42,17 @@ class PPPPSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[dict[str, Any]], Any]
     supported_fn: Callable[[dict[str, Any]], bool]
-    # Re-render on HA's poll interval. Only for values derived from elapsed
-    # time (the camera clock); polling never touches the camera itself.
-    poll: bool = False
     # Which device poll group keeps this value fresh. None for values that
     # never change (timezone), so they never cause a camera round trip.
     poll_group: str | None = None
+    # Extra state attributes, for context that doesn't belong in the state.
+    attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
 
 
-def _camera_time(props: dict[str, Any]) -> str | None:
-    """The camera's own clock, advanced by the time since it was read.
-
-    The cameras never push updates and are only queried on connect, so a raw
-    reading would sit frozen at whatever it said during setup. Projecting it
-    forward keeps it comparable with local time at a glance -- a camera whose
-    clock or timezone is wrong stays visibly offset.
-    """
-    read = props.get("camera_time")
-    read_at = props.get("camera_time_read_at")
-    if read is None or read_at is None:
-        return None
-    elapsed = max(0.0, time.monotonic() - read_at)
-    return (read + timedelta(seconds=elapsed)).strftime("%Y-%m-%d %H:%M:%S")
+def _clock_attrs(props: dict[str, Any]) -> dict[str, Any]:
+    """Show the reading the offset was derived from."""
+    camera_time = props.get("camera_time")
+    return {"camera_time": camera_time.strftime("%Y-%m-%d %H:%M:%S")} if camera_time else {}
 
 
 SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
@@ -157,13 +144,20 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         supported_fn=lambda props: bool(props.get("tz")),
     ),
     PPPPSensorEntityDescription(
-        key="camera_time",
-        translation_key="camera_time",
+        key="clock_offset",
+        translation_key="clock_offset",
         poll_group=POLL_GROUP_INFO,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        poll=True,
-        value_fn=_camera_time,
-        supported_fn=lambda props: props.get("camera_time") is not None,
+        # How far the camera clock is ahead (+) or behind (-) Home Assistant.
+        # Reported instead of the camera's time itself: the offset answers the
+        # question the sensor exists for ("is the clock right?"), stays put
+        # between readings, and can't drift into a plausible-looking lie the
+        # way a locally-advanced clock could.
+        value_fn=lambda props: props.get("clock_offset"),
+        supported_fn=lambda props: props.get("clock_offset") is not None,
+        attrs_fn=_clock_attrs,
     ),
     PPPPSensorEntityDescription(
         key="ssid",
@@ -213,8 +207,6 @@ class PPPPSensor(PPPPBaseEntity, SensorEntity):
         super().__init__(device)
         self.entity_description = description
         self._attr_unique_id = f"{self.device.dev_id}_{description.key}"
-        # Overrides the base class's push-only default for time-derived values.
-        self._attr_should_poll = description.poll
 
     async def async_added_to_hass(self) -> None:
         """Claim the poll group this sensor's value comes from.
@@ -228,12 +220,14 @@ class PPPPSensor(PPPPBaseEntity, SensorEntity):
                 self.device.register_poll_group(self.entity_description.poll_group)
             )
 
-    async def async_update(self) -> None:
-        """Re-render only. Polling must never reach out to the camera: these
-        devices accept a single client, so waking one for a diagnostic value
-        would fight with streaming."""
-
     @property
     def native_value(self) -> Any:
         """Return the current value from the camera's last-known properties."""
         return self.entity_description.value_fn(_properties(self.device))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return supporting context, if this sensor provides any."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(_properties(self.device))
