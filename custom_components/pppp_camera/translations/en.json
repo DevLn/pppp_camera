@@ -55,6 +55,9 @@
       },
       "clock_offset": {
         "name": "Clock offset"
+      },
+      "device_type": {
+        "name": "Device type"
       }
     },
     "select": {

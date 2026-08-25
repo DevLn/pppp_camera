@@ -54,8 +54,17 @@ CONF_INFO_POLL_INTERVAL = "info_poll_interval"
 POLL_GROUP_STATUS = "status"
 POLL_GROUP_INFO = "info"
 
-# Maps a lamp entity key to the camera property that reports its on/off state.
+# Maps a lamp entity key to the camera property whose presence proves the
+# camera has that lamp at all. Both keys are always present on binary cameras,
+# so this decides which entities exist -- not what state they are in.
 LAMP_STATE_PROPERTY = {"white_lamp": "lamp", "ir_lamp": "icut"}
+
+# Maps a lamp entity key to the property carrying its *real* state, from the
+# status block's function bitmap. None on firmwares that don't populate it
+# (PTZA), which is exactly what LAMP_STATE_PROPERTY can't tell you: `lamp` is
+# derived from an unpopulated word and reads 0 there, and `icut` sits at 1
+# whatever the IR is doing. So a lamp reads live only where this is not None.
+LAMP_REPORTED_PROPERTY = {"white_lamp": "funcFillLight", "ir_lamp": "funcIrLed"}
 
 # Seconds to keep a camera session open after the last in-flight operation
 # finishes. Keeping it warm lets back-to-back commands (e.g. PTZ bursts) reuse

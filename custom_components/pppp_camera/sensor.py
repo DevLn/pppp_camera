@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, POLL_GROUP_INFO, POLL_GROUP_STATUS
 from .device import PPPPDevice
-from .entity import PPPPBaseEntity
+from .entity import PPPPBaseEntity, format_device_type
 
 
 def _first(props: dict[str, Any], *keys: str) -> Any:
@@ -53,6 +53,19 @@ def _clock_attrs(props: dict[str, Any]) -> dict[str, Any]:
     """Show the reading the offset was derived from."""
     camera_time = props.get("camera_time")
     return {"camera_time": camera_time.strftime("%Y-%m-%d %H:%M:%S")} if camera_time else {}
+
+
+def _device_type_attrs(props: dict[str, Any]) -> dict[str, Any]:
+    """The raw halves behind the rendered model string.
+
+    Reported even when None: aiopppp's enums come from the vendor apps and are
+    incomplete, so "chipType 2, chipTypeName None" is a useful thing to see
+    rather than an absent attribute.
+    """
+    return {
+        key: props.get(key)
+        for key in ("devType", "devTypeName", "chipType", "chipTypeName")
+    }
 
 
 SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
@@ -156,6 +169,18 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda props: props.get("ssid"),
         supported_fn=lambda props: bool(props.get("ssid")),
+    ),
+    PPPPSensorEntityDescription(
+        key="device_type",
+        translation_key="device_type",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        # Off by default: the same string is already the device's Model, so
+        # this exists for the raw numbers behind it, in the attributes.
+        entity_registry_enabled_default=False,
+        # No poll_group -- a camera's model doesn't change.
+        value_fn=format_device_type,
+        supported_fn=lambda props: format_device_type(props) is not None,
+        attrs_fn=_device_type_attrs,
     ),
 )
 
