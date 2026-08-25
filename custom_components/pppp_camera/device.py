@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import datetime as dt
 import time
+from collections import deque
 from collections.abc import Callable
 
 import aiopppp
@@ -447,13 +448,26 @@ class PPPPDevice:
             proc = await asyncio.create_subprocess_exec(
                 ffmpeg.binary, "-nostdin", "-i", url,
                 "-f", "s16le", "-acodec", "pcm_s16le", "-ar", "8000", "-ac", "1", "pipe:1",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             )
+
+            # Drain stderr concurrently, keeping only the tail. ffmpeg blocks
+            # once the pipe buffer fills, and when it can't fetch the URL its
+            # diagnostics are the only clue -- discarding them turned every
+            # failure into silence with no error at all.
+            stderr_tail: deque[str] = deque(maxlen=15)
+
+            async def _drain_stderr() -> None:
+                async for line in proc.stderr:
+                    stderr_tail.append(line.decode("utf-8", "replace").strip())
+
+            drain = self.hass.async_create_task(_drain_stderr())
 
             # 960 samples * 2 bytes = 120 ms per chunk at 8 kHz, matching the
             # camera's own audio chunking.
             chunk_bytes = 1920
             chunk_seconds = 0.12
+            sent = 0
             await start_talk()
             try:
                 while True:
@@ -461,6 +475,7 @@ class PPPPDevice:
                     if not pcm:
                         break
                     await send_audio(pcm)
+                    sent += len(pcm)
                     # Pace by how much audio this chunk actually represents.
                     await asyncio.sleep(chunk_seconds * len(pcm) / chunk_bytes)
             finally:
@@ -470,6 +485,19 @@ class PPPPDevice:
                         proc.terminate()
                     with contextlib.suppress(asyncio.TimeoutError):
                         await asyncio.wait_for(proc.wait(), timeout=5)
+                drain.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await drain
+
+            if not sent:
+                # ffmpeg produced no audio: bad URL, unreachable HA base URL,
+                # unsupported container. Surface its own words rather than
+                # letting the service silently succeed.
+                detail = "; ".join(stderr_tail) or "no output from ffmpeg"
+                raise HomeAssistantError(f"Could not decode audio from {url}: {detail}")
+            LOGGER.debug(
+                "%s: talk-back sent %.1f s of audio", self.dev_id, sent / 16000
+            )
 
     async def async_sync_datetime(self, data=None) -> None:
         """Set the camera clock to Home Assistant's local time."""

@@ -16,6 +16,7 @@ from homeassistant.components.camera import (
 from homeassistant.components.media_player import (
     ATTR_MEDIA_CONTENT_ID,
     ATTR_MEDIA_CONTENT_TYPE,
+    async_process_play_media_url,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -312,5 +313,10 @@ class PPPPCamera(PPPPBaseEntity, Camera):
                 self.hass, media_id, self.entity_id
             )
             media_id = resolved.url
-        media_id = media_source.async_process_play_media_url(self.hass, media_id)
+        # media_source hands back a signed but *relative* URL
+        # ("/media/local/x.mp3?authSig=..."); ffmpeg needs an absolute one.
+        # This helper lives in media_player, not media_source -- calling it as
+        # media_source.async_process_play_media_url raised AttributeError for
+        # every local media file.
+        media_id = async_process_play_media_url(self.hass, media_id)
         await self.device.async_talk(media_id)
