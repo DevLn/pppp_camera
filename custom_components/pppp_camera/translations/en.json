@@ -56,6 +56,9 @@
       "clock_offset": {
         "name": "Clock offset"
       },
+      "clock_offset_text": {
+        "name": "Clock offset (formatted)"
+      },
       "device_type": {
         "name": "Device type"
       }

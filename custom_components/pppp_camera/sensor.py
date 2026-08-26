@@ -75,6 +75,30 @@ def _format_device_type(props: dict[str, Any]) -> str | None:
     return dev or chip or None
 
 
+def _format_offset(seconds: Any) -> str | None:
+    """Render a signed second count as "-4 h 52 m 59 s".
+
+    Empty units are dropped, so a small offset reads "12 s" rather than
+    "0 d 0 h 0 m 12 s". Days are included because a camera with a wrong date --
+    not just a wrong clock -- shows up here as a very large number.
+    """
+    if seconds is None:
+        return None
+    seconds = int(seconds)
+    sign = "-" if seconds < 0 else ""
+    days, rest = divmod(abs(seconds), 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes, secs = divmod(rest, 60)
+    parts = [
+        f"{value} {unit}"
+        for value, unit in ((days, "d"), (hours, "h"), (minutes, "m"))
+        if value
+    ]
+    if secs or not parts:
+        parts.append(f"{secs} s")
+    return sign + " ".join(parts)
+
+
 def _device_type_attrs(props: dict[str, Any]) -> dict[str, Any]:
     """The raw halves behind the rendered model string.
 
@@ -179,6 +203,19 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         # between readings, and can't drift into a plausible-looking lie the
         # way a locally-advanced clock could.
         value_fn=lambda props: props.get("clock_offset"),
+        supported_fn=lambda props: props.get("clock_offset") is not None,
+        attrs_fn=_clock_attrs,
+    ),
+    PPPPSensorEntityDescription(
+        key="clock_offset_text",
+        translation_key="clock_offset_text",
+        poll_group=POLL_GROUP_INFO,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        # The same offset written for people: "-4 h 52 m 59 s" instead of
+        # "-17,579 s". A separate entity because a state IS what Home Assistant
+        # displays -- there is no display-only formatting -- and clock_offset
+        # must stay a plain number for templates, automations and statistics.
+        value_fn=lambda props: _format_offset(props.get("clock_offset")),
         supported_fn=lambda props: props.get("clock_offset") is not None,
         attrs_fn=_clock_attrs,
     ),
