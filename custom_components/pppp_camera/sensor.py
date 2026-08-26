@@ -17,6 +17,7 @@ from homeassistant.const import (
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -49,12 +50,14 @@ class PPPPSensorEntityDescription(SensorEntityDescription):
 
 
 def _clock_attrs(props: dict[str, Any]) -> dict[str, Any]:
-    """The raw offset, plus the reading it was derived from.
+    """The offset in words, plus the reading it was derived from.
 
-    The state is human-readable text, so `offset_seconds` is what templates and
-    automations should use.
+    Seconds is the right display unit while a clock is roughly correct, which
+    is the normal case, but it reads badly once an offset runs to hours --
+    "-17,579 s". `offset_text` spells that one out without costing the state
+    its numeric type.
     """
-    attrs: dict[str, Any] = {"offset_seconds": props.get("clock_offset")}
+    attrs: dict[str, Any] = {"offset_text": _format_offset(props.get("clock_offset"))}
     if camera_time := props.get("camera_time"):
         attrs["camera_time"] = camera_time.strftime("%Y-%m-%d %H:%M:%S")
     return attrs
@@ -199,20 +202,24 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         key="clock_offset",
         translation_key="clock_offset",
         poll_group=POLL_GROUP_INFO,
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         # How far the camera clock is ahead (+) or behind (-) Home Assistant.
         # Reported instead of the camera's time itself: the offset answers the
         # question the sensor exists for ("is the clock right?"), stays put
         # between readings, and can't drift into a plausible-looking lie the
-        # way a locally-advanced clock could.
+        # way a locally-advanced clock could. That also rules out the timestamp
+        # device class, which renders relative to *now*: a perfectly synced
+        # camera would appear to fall further behind between polls.
         #
-        # The state is human-readable ("-4 h 52 m 59 s"), because a state is
-        # what Home Assistant displays and "-17,579 s" doesn't read as nearly
-        # five hours. The number lives in the `offset_seconds` attribute, which
-        # is what templates and automations should use. That also rules out a
-        # unit and a state_class: both declare a numeric state, and HA logs an
-        # error for every update if the state isn't one.
-        value_fn=lambda props: _format_offset(props.get("clock_offset")),
+        # DURATION keeps the state a plain number -- templates, automations and
+        # statistics all work -- while letting Home Assistant convert the
+        # displayed unit per entity, so a large offset can be read in hours
+        # instead of seconds. Seconds stays the default because a healthy clock
+        # is off by seconds, where hours would render as "-0.0 h".
+        value_fn=lambda props: props.get("clock_offset"),
         supported_fn=lambda props: props.get("clock_offset") is not None,
         attrs_fn=_clock_attrs,
     ),
