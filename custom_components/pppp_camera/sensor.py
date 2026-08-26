@@ -205,6 +205,11 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.MEASUREMENT,
+        # Whole seconds: the value is an int to begin with, and a convertible
+        # unit makes Home Assistant render decimals by default ("3.00 s").
+        # Only a default -- the precision is overridable per entity, and HA
+        # scales it when the displayed unit is converted.
+        suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         # How far the camera clock is ahead (+) or behind (-) Home Assistant.
         # Reported instead of the camera's time itself: the offset answers the
