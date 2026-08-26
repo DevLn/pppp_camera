@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, POLL_GROUP_INFO, POLL_GROUP_STATUS
 from .device import PPPPDevice
-from .entity import PPPPBaseEntity, format_device_type
+from .entity import PPPPBaseEntity
 
 
 def _first(props: dict[str, Any], *keys: str) -> Any:
@@ -53,6 +53,21 @@ def _clock_attrs(props: dict[str, Any]) -> dict[str, Any]:
     """Show the reading the offset was derived from."""
     camera_time = props.get("camera_time")
     return {"camera_time": camera_time.strftime("%Y-%m-%d %H:%M:%S")} if camera_time else {}
+
+
+def _format_device_type(props: dict[str, Any]) -> str:
+    """Render the camera's type as "DevType (ChipType)", e.g. "BK_A9 (TX_817_810)".
+
+    Names only. aiopppp's enums are transcribed from the vendor apps and are
+    incomplete, so a half it can't name is left out rather than shown as a bare
+    number: PTZA, whose chip 2 has no name, reads just "XR_PTZ". "Unknown" when
+    neither half has a name -- the raw numbers are in the attributes either way.
+    """
+    dev = props.get("devTypeName")
+    chip = props.get("chipTypeName")
+    if dev and chip:
+        return f"{dev} ({chip})"
+    return dev or chip or "Unknown"
 
 
 def _device_type_attrs(props: dict[str, Any]) -> dict[str, Any]:
@@ -178,7 +193,7 @@ SENSORS: tuple[PPPPSensorEntityDescription, ...] = (
         # this exists for the raw numbers behind it, in the attributes.
         entity_registry_enabled_default=False,
         # No poll_group -- a camera's type doesn't change.
-        value_fn=format_device_type,
+        value_fn=_format_device_type,
         # Keyed on the raw values, not the rendered name: a camera whose type
         # aiopppp can't name is exactly the one whose numbers are worth having.
         # The state is then "unknown" while the attributes still carry them.

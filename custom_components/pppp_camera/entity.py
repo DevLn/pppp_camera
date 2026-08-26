@@ -16,19 +16,6 @@ from .const import (
 from .device import PPPPDevice
 
 
-def format_device_type(properties: dict[str, Any]) -> str | None:
-    """Render the camera's type as "DevType/ChipType", e.g. "XR_PTZ/TX_817_810".
-
-    Names only. aiopppp's enums are transcribed from the vendor apps and are
-    incomplete, so a half it can't name (PTZA's chip 2) is dropped rather than
-    shown as a bare number -- "XR_PTZ". Returns None when neither half has a
-    name, including for JSON cameras, which report no type at all. The raw
-    numbers stay available on the device_type sensor's attributes.
-    """
-    names = [properties.get("devTypeName"), properties.get("chipTypeName")]
-    return "/".join(name for name in names if name) or None
-
-
 class PPPPBaseEntity(Entity):
     """Base class common to all PPPP entities."""
 
@@ -70,12 +57,14 @@ class PPPPBaseEntity(Entity):
         camera_properties = self.device.device.properties
         return DeviceInfo(
             identifiers={(DOMAIN, self.device.dev_id)},
-            model=self.device.dev_id,
-            # No real manufacturer is discoverable over PPPP, so the field is
-            # reused for the camera's type, e.g. "XR_PTZ/TX_817_810". None
-            # (leaving it unset) for cameras that report no named type.
-            manufacturer=format_device_type(camera_properties),
-            model_id=camera_properties.get('sensor'),
+            # Device type, e.g. "XR_PTZ", falling back to the device id for
+            # cameras whose type aiopppp can't name (or doesn't get told).
+            model=camera_properties.get('devTypeName') or self.device.dev_id,
+            # Chip type, e.g. "TX_817_810". No numeric fallback: an unnamed
+            # chip leaves this unset rather than showing a bare number, and the
+            # number is on the device_type sensor. JSON cameras report no chip
+            # at all but do report an image sensor, which is the same idea.
+            model_id=camera_properties.get('chipTypeName') or camera_properties.get('sensor'),
             serial_number=self.device.dev_id,
             hw_version=camera_properties.get('mcuver'),
             # The camera has no web UI (so a configuration_url "Visit" link is
