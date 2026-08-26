@@ -90,8 +90,7 @@ camera without an SD card gets no usage sensor.
 | Resolution | `select` | Binary-protocol cameras only. QVGA / VGA / HD / FD / UD |
 | Battery | `sensor` | Only when the camera reports a real battery voltage |
 | Power source | `sensor` | External or Battery. Only alongside a battery reading — mains-only cameras leave the field unpopulated rather than reporting "external" |
-| Clock offset | `sensor` | Seconds the camera clock is ahead (+) or behind (−) Home Assistant, with the raw camera time as an attribute |
-| Clock offset (formatted) | `sensor` | The same offset written for people, e.g. `-4 h 52 m 59 s`. Separate entity because a state is what HA displays — `Clock offset` stays a plain number for templates and statistics |
+| Clock offset | `sensor` | How far the camera clock is ahead (+) or behind (−) Home Assistant, as readable text (`-4 h 52 m 59 s`). Attributes: `offset_seconds` — the plain number, for templates and automations — and `camera_time` |
 | Wi-Fi network | `sensor` | SSID the camera is joined to |
 | Timezone | `sensor` | Disabled by default. Not created for firmwares that don't store one |
 | Signal strength | `sensor` | Wi-Fi RSSI in dBm. Disabled by default. Not created when the firmware reports no usable value |
