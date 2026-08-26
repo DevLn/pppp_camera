@@ -81,10 +81,18 @@ class PPPPLampEntity(PPPPBaseEntity):
     Cameras whose status block populates the function bitmap report real lamp
     state (confirmed on FTYC): those entities follow the status poll, so a
     change made from the vendor app shows up here. The rest can only be
-    assumed, and keep the previous behaviour of remembering what we last sent.
+    assumed, and remember what we last sent instead.
     """
 
     _attr_has_entity_name = True
+    # Assumed on every camera, including the ones that do report a reading.
+    # These are cheap devices whose status block has repeatedly turned out to
+    # carry fields that look populated but aren't -- PTZA's `icut` sits at 1
+    # whatever the IR does, and its whole powerSupply word reads zero -- so a
+    # firmware we haven't tested could just as easily report a lamp state that
+    # is quietly wrong. A toggle would claim a certainty we don't have, and it
+    # also keeps every camera's controls looking the same.
+    _attr_assumed_state = True
 
     def __init__(self, device: PPPPDevice, description) -> None:
         """Initialize the lamp."""
@@ -99,7 +107,6 @@ class PPPPLampEntity(PPPPBaseEntity):
             else None
         )
         self._reports_state = reported is not None
-        self._attr_assumed_state = not self._reports_state
 
         if self._reports_state:
             self._attr_is_on = bool(reported)

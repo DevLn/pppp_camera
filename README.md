@@ -84,7 +84,7 @@ camera without an SD card gets no usage sensor.
 | Entity | Platform | Notes |
 |:-------|:---------|:------|
 | Camera | `camera` | Live stream, snapshots, and turn on/off (starts and stops the video stream) |
-| White Lamp / IR Lamp | `switch`, `light` or `button` | Only for cameras reporting that lamp. The platform is chosen by the `platform.lamp` option. Cameras that report real lamp state (function bitmap in the status block) track it live, so changes made from the vendor app show up; the rest assume their own writes |
+| White Lamp / IR Lamp | `switch`, `light` or `button` | Only for cameras reporting that lamp. The platform is chosen by the `platform.lamp` option. Cameras that report real lamp state (function bitmap in the status block) track it live, so changes made from the vendor app show up; the rest assume their own writes. All lamps are marked assumed-state either way — these cameras report fields that look populated but aren't often enough that a toggle would overstate what we know |
 | Reboot | `button` | Only when logged in — the camera refuses it otherwise |
 | Sync time | `button` | Binary-protocol cameras only |
 | Resolution | `select` | Binary-protocol cameras only. QVGA / VGA / HD / FD / UD |
