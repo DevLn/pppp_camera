@@ -55,19 +55,24 @@ def _clock_attrs(props: dict[str, Any]) -> dict[str, Any]:
     return {"camera_time": camera_time.strftime("%Y-%m-%d %H:%M:%S")} if camera_time else {}
 
 
-def _format_device_type(props: dict[str, Any]) -> str:
+def _format_device_type(props: dict[str, Any]) -> str | None:
     """Render the camera's type as "DevType (ChipType)", e.g. "BK_A9 (TX_817_810)".
 
     Names only. aiopppp's enums are transcribed from the vendor apps and are
     incomplete, so a half it can't name is left out rather than shown as a bare
-    number: PTZA, whose chip 2 has no name, reads just "XR_PTZ". "Unknown" when
-    neither half has a name -- the raw numbers are in the attributes either way.
+    number: PTZA, whose chip 2 has no name, reads just "XR_PTZ".
+
+    None when neither half has a name, which Home Assistant renders as
+    "Unknown" -- rather than a literal "Unknown" string, which would look the
+    same but be a real value, so templates comparing against the usual
+    "unknown" state would silently never match. The raw numbers stay in the
+    attributes either way, which is what makes such a camera diagnosable.
     """
     dev = props.get("devTypeName")
     chip = props.get("chipTypeName")
     if dev and chip:
         return f"{dev} ({chip})"
-    return dev or chip or "Unknown"
+    return dev or chip or None
 
 
 def _device_type_attrs(props: dict[str, Any]) -> dict[str, Any]:

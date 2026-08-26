@@ -95,7 +95,7 @@ camera without an SD card gets no usage sensor.
 | Timezone | `sensor` | Disabled by default. Not created for firmwares that don't store one |
 | Signal strength | `sensor` | Wi-Fi RSSI in dBm. Disabled by default. Not created when the firmware reports no usable value |
 | SD card usage | `sensor` | Disabled by default. Only when a card is present |
-| Device type | `sensor` | Disabled by default. `DevType (ChipType)`, e.g. `BK_A9 (TX_817_810)` — just the known half if only one is named, `Unknown` if neither. `devType`/`devTypeName`/`chipType`/`chipTypeName` as attributes |
+| Device type | `sensor` | Disabled by default. `DevType (ChipType)`, e.g. `BK_A9 (TX_817_810)` — just the known half if only one is named, unknown if neither. `devType`/`devTypeName`/`chipType`/`chipTypeName` as attributes |
 
 All sensors are diagnostic entities; the resolution select and the reboot/sync
 buttons are config entities.
